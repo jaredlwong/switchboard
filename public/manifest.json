@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "bookmark-manager",
+  "version": "1.0.0",
+  "description": "manage bookmarks",
+  "permissions": [
+    "activeTab",
+    "bookmarks",
+    "notifications",
+    "scripting",
+    "storage",
+    "tabGroups",
+    "tabs"
+  ],
+  "background": {
+    "service_worker": "js/background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "options_page": "page.html",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' https://cdn.tailwindcss.com/; object-src 'self'"
+  }
+}
