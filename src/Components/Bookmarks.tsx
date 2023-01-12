@@ -135,8 +135,8 @@ async function closeTab(tab: chrome.tabs.Tab): Promise<void> {
 }
 
 const FaviconImage = styled.img`
-  width: 16px;
-  height: 16px;
+  /* width: 16px;
+  height: 16px; */
   display: inline-block;
   margin: 0 4px;
 `;
@@ -162,7 +162,7 @@ export const TabTable: React.FC<{ group: TabGroup }> = ({ group }) => {
     <div className="grid grid-cols-12">
       {group.tabs.map((tab) => (
         <>
-          <div key={`title-${tab.id}`} className="col-span-9">
+          <div key={`title-${tab.id}`} className={cx("col-span-9", fixedWidthNoScrollbar)}>
             <a
               href={tab.url}
               target="_blank"
@@ -171,14 +171,14 @@ export const TabTable: React.FC<{ group: TabGroup }> = ({ group }) => {
                 display: inline-block;
               `}
             >
-              <FaviconImage src={tab.favIconUrl} />
+              <FaviconImage src={tab.favIconUrl} className="h-4" />
               {tab.title}
             </a>
           </div>
           <div key={`link-${tab.id}`} className={cx("col-span-2", fixedWidthNoScrollbar)}>
             {tab.url}
           </div>
-          <div key={`close-${tab.id}`} className="col-span-1">
+          <div key={`close-${tab.id}`} className="col-span-1 h-4">
             <button onClick={() => closeTab(tab)}>
               <IconSquareX />
             </button>
@@ -311,14 +311,20 @@ export const Bookmarks: React.FC = () => {
         {/* <TabGroupTableCombined tabGroupInit={tabGroups} /> */}
         {[...tabGroups.entries()].map(([groupId, group]) => (
           <div key={groupId} className="rounded-md p-2 m-2 border border-gray-300 bg-white">
-            <div className="flex space-x-4">
-              <h1 className="text-base">{group.tabGroup?.title ?? "Ungrouped"}</h1>
-              <button
-                className="text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
-                onClick={() => saveAndCloseTabGroup(group)}
-              >
-                Bookmark
-              </button>
+            <div className="flex">
+              <div className="flex-1 justify-start">
+                <h1 className="text-base">{group.tabGroup?.title ?? "Ungrouped"}</h1>
+              </div>
+              <div className="justify-end">
+                <div>
+                  <button
+                    className="text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
+                    onClick={() => saveAndCloseTabGroup(group)}
+                  >
+                    Bookmark
+                  </button>
+                </div>
+              </div>
             </div>
             <TabTable group={group} />
             {/* <TabGroupTableDense tabs={group.tabs.map((tab) => ({ tab }))} /> */}
@@ -328,20 +334,24 @@ export const Bookmarks: React.FC = () => {
       <div className="flex flex-col min-w-200 w-full lg:max-w-screen-lg">
         {[...bookmarkGroups.entries()].map(([i, group]) => (
           <div key={i} className="rounded-md p-2 m-2 border border-gray-300 bg-white">
-            <div className="flex space-x-4">
-              <h1 className="text-base">{group.path.join(" > ")}</h1>
-              <button
-                className="text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
-                onClick={() => createTabGroup(group.title, group.bookmarks)}
-              >
-                Create Tab Group
-              </button>
-              <button
-                className="text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
-                onClick={() => deleteBookmarks(group)}
-              >
-                Delete Bookmarks
-              </button>
+            <div className="flex">
+              <div className="flex-1 justify-start">
+                <h1 className="text-base">{group.path.join(" > ")}</h1>
+              </div>
+              <div className="justify-end">
+                <button
+                  className="mx-2 text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
+                  onClick={() => createTabGroup(group.title, group.bookmarks)}
+                >
+                  Create Tab Group
+                </button>
+                <button
+                  className="mx-2 text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
+                  onClick={() => deleteBookmarks(group)}
+                >
+                  Delete Bookmarks
+                </button>
+              </div>
             </div>
             <BookmarkTable2 group={group} />
             {/* <BookmarkTable path={group.path ?? []} bookmarks={group.bookmarks} /> */}
