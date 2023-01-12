@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "bookmark-manager",
+  "name": "switchboard",
   "version": "1.0.0",
   "description": "manage bookmarks",
   "permissions": [
@@ -19,7 +19,5 @@
     "default_popup": "popup.html"
   },
   "options_page": "page.html",
-  "content_security_policy": {
-    "extension_pages": "script-src 'self' https://cdn.tailwindcss.com/; object-src 'self'"
-  }
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqF5N6MtjHHNKQD/n6MjMzDnNQMecoNXks9wWwJZhjJ1nOHfFhgYNvKdscmXVb4lsYNkmW7EL73Y+grjnliHU50o8EmTg5JtF8ms81jZJ/zLtUKxKPb2FMoyHzuExKUVpZDD6aII3vMx6HFe8CcM2KwBS0XV7z7jblOO8XcdiNX+TTMs4HApWGIhGf8Uq6HYKoyrwhQAnWRJPrtktPKVeores7bH1hJ0/WTYFpgkH5sS9sbPMvoX0rYT1aidUyPGOHfU3jq+m3jiKQbIHBuvxWL1QSP/+ALjk1T0ruO2S2hMV/iAuoYJBAPSeGHr4K94HQqpG/UFru2HCBeG7z97k/QIDAQAB"
 }
