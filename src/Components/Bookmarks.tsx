@@ -1,4 +1,4 @@
-import { css } from "@linaria/core";
+import { css, cx } from "@linaria/core";
 import { styled } from "@linaria/react";
 import { IconSquareX } from "@tabler/icons";
 import React, { useEffect, useState } from "react";
@@ -141,7 +141,8 @@ const FaviconImage = styled.img`
   margin: 0 4px;
 `;
 
-const BookmarkLink = styled.a`
+// const BookmarkLink = styled.a`
+const fixedWidthNoScrollbar = css`
   // text-overflow: ellipsis;
   // white-space: nowrap;
   display: inline-block;
@@ -174,13 +175,46 @@ export const TabTable: React.FC<{ group: TabGroup }> = ({ group }) => {
               {tab.title}
             </a>
           </div>
-          <BookmarkLink key={`link-${tab.id}`} className="col-span-2">
+          <div key={`link-${tab.id}`} className={cx("col-span-2", fixedWidthNoScrollbar)}>
             {tab.url}
-          </BookmarkLink>
+          </div>
           <div key={`close-${tab.id}`} className="col-span-1">
             <button onClick={() => closeTab(tab)}>
               <IconSquareX />
             </button>
+          </div>
+        </>
+      ))}
+    </div>
+  );
+};
+
+function getFaviconUrl(url: string): string {
+  const urlObj = new URL(url);
+  return `https://www.google.com/s2/favicons?domain=${urlObj.hostname}`;
+  // http://www.google.com/profiles/c/favicons?domain=targetsite.com
+}
+
+export const BookmarkTable2: React.FC<{ group: BookmarkGroup }> = ({ group }) => {
+  return (
+    <div className="grid grid-cols-12">
+      {group.bookmarks.map((bookmark) => (
+        <>
+          <div key={`title-${bookmark.id}`} className={cx("col-span-9", fixedWidthNoScrollbar)}>
+            <a
+              href={bookmark.url}
+              target="_blank"
+              rel="noreferrer"
+              className={css`
+                display: inline-block;
+              `}
+            >
+              <FaviconImage src={getFaviconUrl(bookmark.url ?? "")} />
+              {bookmark.title}
+            </a>
+          </div>
+          <div key={`link-${bookmark.id}`} className={cx("col-span-2", fixedWidthNoScrollbar)}>
+            {bookmark.url}
           </div>
         </>
       ))}
@@ -309,7 +343,8 @@ export const Bookmarks: React.FC = () => {
                 Delete Bookmarks
               </button>
             </div>
-            <BookmarkTable path={group.path ?? []} bookmarks={group.bookmarks} />
+            <BookmarkTable2 group={group} />
+            {/* <BookmarkTable path={group.path ?? []} bookmarks={group.bookmarks} /> */}
           </div>
         ))}
       </div>
