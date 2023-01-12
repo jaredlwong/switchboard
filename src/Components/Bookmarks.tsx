@@ -1,8 +1,7 @@
-import { css, cx } from "@linaria/core";
+import { css } from "@linaria/core";
 import { styled } from "@linaria/react";
 import { IconSquareX } from "@tabler/icons";
 import React, { useEffect, useState } from "react";
-import { DefaultDict } from "../utils";
 import { BookmarkTable } from "./BookmarkTable";
 
 type BookmarkGroup = {
@@ -18,7 +17,7 @@ type TabGroup = {
   groupId: number;
 };
 
-function walkBookmarkTree2(root: chrome.bookmarks.BookmarkTreeNode[]): Map<string, BookmarkGroup> {
+function walkBookmarkTree(root: chrome.bookmarks.BookmarkTreeNode[]): Map<string, BookmarkGroup> {
   const groups = new Map<string, BookmarkGroup>();
   const recurse = (previousPath: string[], node: chrome.bookmarks.BookmarkTreeNode) => {
     const curPath = [...previousPath, node.title];
@@ -46,46 +45,6 @@ function walkBookmarkTree2(root: chrome.bookmarks.BookmarkTreeNode[]): Map<strin
   return groups;
 }
 
-function walkBookmarkTree(bookmarks: chrome.bookmarks.BookmarkTreeNode[]): BookmarkGroup[] {
-  const groups = new DefaultDict<string, BookmarkGroup>(() => ({ bookmarks: [], title: "", path: [], id: "" }));
-  const folders = bookmarks.filter((bookmark) => !bookmark.url);
-  for (const bookmark of bookmarks) {
-    const parent = bookmark.parentId ?? "unknown";
-    if (bookmark.url) {
-      groups.get(parent).bookmarks.push(bookmark);
-    }
-  }
-  for (const folder of folders) {
-    groups.get(folder.id).title = folder.title;
-    groups.get(folder.id).id = folder.parentId!;
-  }
-  if (groups.has("1")) {
-    groups.get("1").title = "Bookmarks Bar";
-  }
-  if (groups.has("2")) {
-    groups.get("2").title = "Other Bookmarks";
-  }
-  const resolvePath = (id: string): string[] => {
-    if (!groups.has(id)) {
-      return [];
-    }
-    const group = groups.get(id);
-    if (group.path !== undefined) {
-      return group.path!;
-    }
-    if (group.id === undefined) {
-      group.path = [group.title];
-      return group.path;
-    }
-    group.path = [...resolvePath(group.id), group.title];
-    return group.path!;
-  };
-  for (const id of groups.keys()) {
-    resolvePath(id);
-  }
-  return [...groups.values()].filter((group) => group.bookmarks.length > 0);
-}
-
 function sortMapByKey<K, V>(map: Map<K, V>) {
   const sortedArray: Array<[K, V]> = Array.from(map).sort((a, b) => {
     if (a[0] > b[0]) return 1;
@@ -99,14 +58,14 @@ function groupTabs(tabGroups: chrome.tabGroups.TabGroup[], tabs: chrome.tabs.Tab
   const groups = new Map<number, TabGroup>();
   for (const tab of tabs) {
     const groupId = tab.groupId ?? -1;
-    if (!groups.has(groupId)) {
-      groups.set(groupId, { tabs: [], groupId });
-    }
-    groups.get(groupId)!.tabs.push(tab);
+    const tabGroup = groups.get(groupId) ?? { tabs: [], groupId };
+    groups.set(groupId, tabGroup);
+    tabGroup.tabs.push(tab);
   }
   for (const tabGroup of tabGroups) {
-    if (groups.has(tabGroup.id)) {
-      groups.get(tabGroup.id)!.tabGroup = tabGroup;
+    const tg = groups.get(tabGroup.id);
+    if (tg !== undefined) {
+      tg.tabGroup = tabGroup;
     }
   }
   return sortMapByKey(groups);
@@ -309,7 +268,7 @@ export const Bookmarks: React.FC = () => {
   }, [tabs, tabGroupsRaw]);
 
   useEffect(() => {
-    setBookmarkGroups(walkBookmarkTree2(bookmarkTree));
+    setBookmarkGroups(walkBookmarkTree(bookmarkTree));
   }, [bookmarkTree]);
 
   return (
