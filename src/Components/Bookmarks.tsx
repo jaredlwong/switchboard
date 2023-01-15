@@ -3,9 +3,11 @@ import { styled } from "@linaria/react";
 import { IconSquareX } from "@tabler/icons";
 import React, { useEffect, useState } from "react";
 import { BookmarkTable } from "./BookmarkTable";
+import { TabGroup as TabGroupXXX } from "./TabGroup";
 
 type BookmarkGroup = {
   id: string;
+  parent: chrome.bookmarks.BookmarkTreeNode;
   bookmarks: chrome.bookmarks.BookmarkTreeNode[];
   title: string;
   path: string[];
@@ -23,6 +25,7 @@ function walkBookmarkTree(root: chrome.bookmarks.BookmarkTreeNode[]): Map<string
     const curPath = [...previousPath, node.title];
     const curGroup: BookmarkGroup = {
       id: node.id ?? "unknown",
+      parent: node,
       bookmarks: [],
       title: node.title,
       path: curPath,
@@ -230,10 +233,12 @@ export const Bookmarks: React.FC = () => {
   const [tabGroups, setTabGroups] = useState<Map<number, TabGroup>>(new Map());
   const [bookmarkGroups, setBookmarkGroups] = useState<Map<string, BookmarkGroup>>(new Map());
 
-  useEffect(() => {
-    const updateTabs = () => chrome.tabs.query({}, setTabs);
-    updateTabs();
+  const updateTabs = () => chrome.tabs.query({}, setTabs);
+  const updateTabGroups = () => chrome.tabGroups.query({}, setTabGroupsRaw);
+  const updateBookmarks = () => chrome.bookmarks.getTree(setBookmarkTree);
 
+  useEffect(() => {
+    updateTabs();
     chrome.tabs.onCreated.addListener(updateTabs);
     chrome.tabs.onUpdated.addListener(updateTabs);
     chrome.tabs.onRemoved.addListener(updateTabs);
@@ -243,7 +248,6 @@ export const Bookmarks: React.FC = () => {
     chrome.tabs.onMoved.addListener(updateTabs);
     chrome.tabs.onAttached.addListener(updateTabs);
     chrome.tabs.onDetached.addListener(updateTabs);
-
     return () => {
       chrome.tabs.onCreated.removeListener(updateTabs);
       chrome.tabs.onUpdated.removeListener(updateTabs);
@@ -258,14 +262,11 @@ export const Bookmarks: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const updateTabGroups = () => chrome.tabGroups.query({}, setTabGroupsRaw);
     updateTabGroups();
-
     chrome.tabGroups.onCreated.addListener(updateTabGroups);
     chrome.tabGroups.onUpdated.addListener(updateTabGroups);
     chrome.tabGroups.onRemoved.addListener(updateTabGroups);
     chrome.tabGroups.onMoved.addListener(updateTabGroups);
-
     return () => {
       chrome.tabGroups.onCreated.removeListener(updateTabGroups);
       chrome.tabGroups.onUpdated.removeListener(updateTabGroups);
@@ -275,9 +276,7 @@ export const Bookmarks: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const updateBookmarks = () => chrome.bookmarks.getTree(setBookmarkTree);
     updateBookmarks();
-
     chrome.bookmarks.onRemoved.addListener(updateBookmarks);
     chrome.bookmarks.onImportEnded.addListener(updateBookmarks);
     chrome.bookmarks.onImportBegan.addListener(updateBookmarks);
@@ -285,7 +284,6 @@ export const Bookmarks: React.FC = () => {
     chrome.bookmarks.onMoved.addListener(updateBookmarks);
     chrome.bookmarks.onCreated.addListener(updateBookmarks);
     chrome.bookmarks.onChildrenReordered.addListener(updateBookmarks);
-
     return () => {
       chrome.bookmarks.onRemoved.removeListener(updateBookmarks);
       chrome.bookmarks.onImportEnded.removeListener(updateBookmarks);
@@ -306,58 +304,69 @@ export const Bookmarks: React.FC = () => {
   }, [bookmarkTree]);
 
   return (
-    <div className="bg-gray-200 grid place-items-center">
-      <div className="flex flex-col min-w-200 w-full lg:max-w-screen-lg">
-        {/* <TabGroupTableCombined tabGroupInit={tabGroups} /> */}
+    <div className="bg-gray-200 grid place-items-center grid-cols-1 gap-y-4">
+      <div className="flex flex-col gap-y-4">
         {[...tabGroups.entries()].map(([groupId, group]) => (
-          <div key={groupId} className="rounded-md p-2 m-2 border border-gray-300 bg-white">
-            <div className="flex">
-              <div className="flex-1 justify-start">
-                <h1 className="text-base">{group.tabGroup?.title ?? "Ungrouped"}</h1>
-              </div>
-              <div className="justify-end">
-                <div>
-                  <button
-                    className="text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
-                    onClick={() => saveAndCloseTabGroup(group)}
-                  >
-                    Bookmark
-                  </button>
-                </div>
-              </div>
-            </div>
-            <TabTable group={group} />
-            {/* <TabGroupTableDense tabs={group.tabs.map((tab) => ({ tab }))} /> */}
-          </div>
+          <TabGroupXXX groupName={group.tabGroup?.title ?? "Ungrouped"} tabs={group.tabs} onUpdate={() => updateTabs} />
         ))}
       </div>
-      <div className="flex flex-col min-w-200 w-full lg:max-w-screen-lg">
-        {[...bookmarkGroups.entries()].map(([i, group]) => (
-          <div key={i} className="rounded-md p-2 m-2 border border-gray-300 bg-white">
-            <div className="flex">
-              <div className="flex-1 justify-start">
-                <h1 className="text-base">{group.path.join(" > ")}</h1>
-              </div>
-              <div className="justify-end">
-                <button
-                  className="mx-2 text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
-                  onClick={() => createTabGroup(group.title, group.bookmarks)}
-                >
-                  Create Tab Group
-                </button>
-                <button
-                  className="mx-2 text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
-                  onClick={() => deleteBookmarks(group)}
-                >
-                  Delete Bookmarks
-                </button>
-              </div>
-            </div>
-            <BookmarkTable2 group={group} />
-            {/* <BookmarkTable path={group.path ?? []} bookmarks={group.bookmarks} /> */}
-          </div>
+      <div className="flex flex-col gap-y-4">
+        {[...bookmarkGroups.entries()].map(([groupId, group]) => (
+          <BookmarkTable parent={group.parent} bookmarks={group.bookmarks} />
         ))}
       </div>
     </div>
   );
 };
+
+// <div className="flex flex-col min-w-200 w-full lg:max-w-screen-lg">
+//   {/* <TabGroupTableCombined tabGroupInit={tabGroups} /> */}
+//   {[...tabGroups.entries()].map(([groupId, group]) => (
+//     <div key={groupId} className="rounded-md p-2 m-2 border border-gray-300 bg-white">
+//       <div className="flex">
+//         <div className="flex-1 justify-start">
+//           <h1 className="text-base">{group.tabGroup?.title ?? "Ungrouped"}</h1>
+//         </div>
+//         <div className="justify-end">
+//           <div>
+//             <button
+//               className="text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
+//               onClick={() => saveAndCloseTabGroup(group)}
+//             >
+//               Bookmark
+//             </button>
+//           </div>
+//         </div>
+//       </div>
+//       <TabTable group={group} />
+//       {/* <TabGroupTableDense tabs={group.tabs.map((tab) => ({ tab }))} /> */}
+//     </div>
+//   ))}
+// </div>
+// <div className="flex flex-col min-w-200 w-full lg:max-w-screen-lg">
+//   {[...bookmarkGroups.entries()].map(([i, group]) => (
+//     <div key={i} className="rounded-md p-2 m-2 border border-gray-300 bg-white">
+//       <div className="flex">
+//         <div className="flex-1 justify-start">
+//           <h1 className="text-base">{group.path.join(" > ")}</h1>
+//         </div>
+//         <div className="justify-end">
+//           <button
+//             className="mx-2 text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
+//             onClick={() => createTabGroup(group.title, group.bookmarks)}
+//           >
+//             Create Tab Group
+//           </button>
+//           <button
+//             className="mx-2 text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
+//             onClick={() => deleteBookmarks(group)}
+//           >
+//             Delete Bookmarks
+//           </button>
+//         </div>
+//       </div>
+//       <BookmarkTable2 group={group} />
+//       {/* <BookmarkTable path={group.path ?? []} bookmarks={group.bookmarks} /> */}
+//     </div>
+//   ))}
+// </div>
