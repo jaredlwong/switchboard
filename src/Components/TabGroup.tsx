@@ -1,7 +1,7 @@
 import { css, cx } from "@linaria/core";
 import { IconVolume, IconVolumeOff } from "@tabler/icons";
 import React, { ReactNode, useCallback, useState } from "react";
-import { closeTab, closeTabs, focusOnTab, muteTab, muteTabs, saveTabsToFolder, unmuteTab } from "../tabs";
+import { closeTab, closeTabs, focusOnTab, muteTab, muteTabs, saveTabsToFolder, unmuteTab } from "../utils/chrome";
 import { Favicon } from "./FaviconImage";
 
 // const styles = require("./TabGroup.module.css");

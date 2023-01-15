@@ -1,5 +1,16 @@
 import { cx } from "@linaria/core";
-import { IconFolderPlus, IconSortAscending, IconSortDescending, IconTrash } from "@tabler/icons";
+import {
+  IconCaretDown,
+  IconFolderMinus,
+  IconFolderPlus,
+  IconLayoutGridAdd,
+  IconMinusVertical,
+  IconSortAscending,
+  IconSortDescending,
+  IconTrash,
+  IconVolume,
+  IconVolumeOff,
+} from "@tabler/icons";
 import {
   ColumnDef,
   flexRender,
@@ -11,22 +22,17 @@ import {
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import React, { HTMLProps, useMemo, useState } from "react";
-import { createTabGroup, deleteBookmarks } from "../utils/chrome";
-import { relativeTimeFromDates } from "../utils/data";
+import React, { HTMLProps, useEffect, useId, useMemo, useState } from "react";
+import {
+  addTabsToExistingGroup,
+  closeTab,
+  closeTabs,
+  muteTab,
+  saveTabsToBookmarkTree,
+  saveTabsToFolder,
+  unmuteTab,
+} from "../utils/chrome";
 import { Favicon } from "./FaviconImage";
-
-type Bookmark = chrome.bookmarks.BookmarkTreeNode;
-
-// // expands object types one level deep
-// type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
-
-// // expands object types recursively
-// type ExpandRecursively<T> = T extends object
-//   ? T extends infer O ? { [K in keyof O]: ExpandRecursively<O[K]> } : never
-//   : T;
-
-// type Test<TData extends RowData, TValue = unknown> = ExpandRecursively<DisplayColumnDef<TData, TValue>>
 
 const IndeterminateCheckbox: React.FC<
   {
@@ -45,13 +51,52 @@ const IndeterminateCheckbox: React.FC<
   return <input type="checkbox" ref={ref} className={cx(className, "cursor-pointer")} {...props} />;
 };
 
-export const BookmarkTable: React.FC<{ parent: Bookmark; bookmarks: Bookmark[] }> = ({ parent, bookmarks }) => {
+const MuteButton: React.FC<{ tab: chrome.tabs.Tab }> = ({ tab }) => {
+  let inner = <></>;
+  if (tab.mutedInfo?.muted) {
+    inner = (
+      <button onClick={() => unmuteTab(tab)}>
+        <IconVolumeOff size={16} />
+      </button>
+    );
+  } else if (tab.audible) {
+    inner = (
+      <button onClick={() => muteTab(tab)}>
+        <IconVolume size={16} />
+      </button>
+    );
+  }
+  return (
+    <div>
+      <div key={tab.id} className="flex items-center justify-center w-full h-6 border-b border-gray-200">
+        {inner}
+      </div>
+    </div>
+  );
+};
+
+export type GroupOption =
+  | { type: "tabGroup"; value: chrome.tabGroups.TabGroup }
+  | { type: "bookmarkFolder"; value: chrome.bookmarks.BookmarkTreeNode };
+
+interface Props {
+  groupName: string;
+  tabs: chrome.tabs.Tab[];
+  groupOptions: GroupOption[];
+}
+
+export const TabTable: React.FC<Props> = ({ groupName, tabs, groupOptions }) => {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [selectedGroup, setSelectedGroup] = useState<GroupOption | undefined>(undefined);
 
   type Link = { url: string; title: string };
 
-  type CB<T> = ColumnDef<Bookmark, T>;
+  type CB<T> = ColumnDef<chrome.tabs.Tab, T>;
+
+  const closeTabInternal = async (tab: chrome.tabs.Tab) => {
+    await closeTab(tab);
+  };
 
   const columns = useMemo<(CB<number> | CB<Date> | CB<Link>)[]>(
     () => [
@@ -74,7 +119,7 @@ export const BookmarkTable: React.FC<{ parent: Bookmark; bookmarks: Bookmark[] }
       } satisfies CB<number>,
       {
         id: "title",
-        accessorFn: (row) => ({ url: row.url ?? "", title: row.title } satisfies Link),
+        accessorFn: (row) => ({ url: row.url ?? "", title: row.title ?? "" } satisfies Link),
         header: "Title",
         cell: (props) => (
           <a href={props.getValue().url} target="_blank" rel="noreferrer">
@@ -82,24 +127,40 @@ export const BookmarkTable: React.FC<{ parent: Bookmark; bookmarks: Bookmark[] }
           </a>
         ),
         enableSorting: true,
-        sortingFn: (rowA: Row<Bookmark>, rowB: Row<Bookmark>, columnId: string) => {
+        sortingFn: (rowA: Row<chrome.tabs.Tab>, rowB: Row<chrome.tabs.Tab>, columnId: string) => {
           return rowA.getValue<Link>(columnId).url < rowB.getValue<Link>(columnId).url ? 1 : -1;
         },
       } satisfies CB<Link>,
       {
-        id: "date_added",
-        accessorFn: (row) => (row.dateAdded ? new Date(row.dateAdded) : new Date()),
-        header: "Date Added",
-        enableSorting: true,
-        sortingFn: "datetime",
-        cell: (props) => relativeTimeFromDates(props.getValue()),
-      } satisfies CB<Date>,
+        id: "mute_tab",
+        header: () => <></>,
+        cell: ({ row }) => <MuteButton tab={row.original} />,
+      } satisfies CB<number>,
+      {
+        id: "close_tab",
+        header: () => <></>,
+        cell: ({ row }) => (
+          <div className="flex items-center justify-center w-full h-6 group">
+            <button onClick={() => closeTabInternal(row.original)}>
+              <IconTrash size={16} />
+            </button>
+          </div>
+        ),
+      } satisfies CB<number>,
+      // {
+      //   id: "last_opened",
+      //   accessorFn: (row) => (row.dateAdded ? new Date(row.dateAdded) : new Date()),
+      //   header: "Last Opened",
+      //   enableSorting: true,
+      //   sortingFn: "datetime",
+      //   cell: (props) => relativeTimeFromDates(props.getValue()),
+      // } satisfies CB<Date>,
     ],
     [],
   );
 
-  const table = useReactTable<Bookmark>({
-    data: bookmarks,
+  const table = useReactTable<chrome.tabs.Tab>({
+    data: tabs,
     columns,
     state: {
       rowSelection,
@@ -115,44 +176,80 @@ export const BookmarkTable: React.FC<{ parent: Bookmark; bookmarks: Bookmark[] }
     debugColumns: true,
   });
 
-  const deleteSelectedBookmarks = async () => {
-    const bookmarks = table.getSelectedRowModel().flatRows.map((row) => row.original);
+  const closeSelectedTabs = async () => {
+    const tabs = table.getSelectedRowModel().flatRows.map((row) => row.original);
     setRowSelection({});
-    await deleteBookmarks(bookmarks);
+    await closeTabs(tabs);
   };
 
-  const openBookmarks = async () => {
-    await createTabGroup(parent.title, bookmarks);
+  const bookmarkGroupInternal = async () => {
+    await saveTabsToFolder(groupName, tabs);
+    await closeTabs(tabs);
   };
+
+  const handleSelectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedGroup(groupOptions[Number(event.target.value)]);
+  };
+
+  const saveTabsToGroup = async () => {
+    if (selectedGroup === undefined) {
+      return;
+    }
+    const tabs = table.getSelectedRowModel().flatRows.map((row) => row.original);
+    if (selectedGroup.type === "bookmarkFolder") {
+      setRowSelection({});
+      await saveTabsToBookmarkTree(selectedGroup.value, tabs);
+      await closeTabs(tabs);
+    } else if (selectedGroup.type === "tabGroup") {
+      await addTabsToExistingGroup(selectedGroup.value, tabs);
+    }
+  };
+
+  useEffect(() => {
+    setSelectedGroup(groupOptions[0]);
+  }, []);
 
   return (
     // <div className="p-2 min-w-[200px] lg:max-w-6xl">
     <div className="p-2 min-w-[200px] w-screen lg:max-w-6xl flex flex-col rounded-xl border border-solid border-slate-200 bg-white items-start gap-2.5 drop-shadow-md">
       <div className="flex flex-row w-full">
         <div className="flex flex-row items-center gap-x-2 grow">
-          <span className="font-sans text-base font-semibold text-slate-800">{parent.title}</span>
+          <span className="font-sans text-base font-semibold text-slate-800">{groupName}</span>
           <div className="flex items-center p-1 rounded-2xl bg-violet-50">
-            <span className="px-1 text-xs font-semibold leading-4 text-center text-violet-700">
-              {bookmarks.length} bookmarks
-            </span>
+            <span className="px-1 text-xs font-semibold leading-4 text-center text-violet-700">{tabs.length} tabs</span>
           </div>
         </div>
         <div className="flex flex-row gap-x-3">
           <div className="flex flex-row items-center justify-end">
             <button
               className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
-              onClick={openBookmarks}
+              onClick={bookmarkGroupInternal}
             >
-              <IconFolderPlus size={16} /> Create Tab Group
+              <IconFolderMinus size={16} /> Bookmark Group
             </button>
           </div>
           <div className="flex flex-row items-center justify-end">
             <button
               className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
-              onClick={deleteSelectedBookmarks}
+              onClick={closeSelectedTabs}
             >
-              <IconTrash size={16} /> Delete Bookmarks
+              <IconTrash size={16} /> Close Tabs
             </button>
+          </div>
+          <div className="flex flex-row items-center justify-end">
+            <div className="flex flex-row items-center px-2 py-1 text-sm font-semibold bg-indigo-100 border border-solid rounded-lg">
+              <select className="bg-indigo-100 cursor-pointer" onChange={handleSelectionChange}>
+                {groupOptions.map((group, index) => (
+                  <option key={index} value={index}>
+                    {group.value.title}
+                  </option>
+                ))}
+              </select>
+              <div className="w-0 h-4 mx-1.5 border border-slate-400 rounded-t rounded-b" />
+              <button onClick={saveTabsToGroup}>
+                <IconLayoutGridAdd size={16} />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -218,7 +315,7 @@ export const BookmarkTable: React.FC<{ parent: Bookmark; bookmarks: Bookmark[] }
                 } else {
                   return (
                     <td key={cell.id} className="h-6 border-b border-b-slate-300 text-nowrap whitespace-nowrap">
-                      <div className="flex items-center justify-center">
+                      <div className={cx("flex items-center justify-center", cell.column.id !== "select" ? "w-6" : "")}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </div>
                     </td>

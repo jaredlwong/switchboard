@@ -1,14 +1,12 @@
-export async function closeTabs(tabs: chrome.tabs.Tab[]) {
-  for (const tab of tabs) {
-    const id = tab.id;
-    if (id !== undefined) {
-      try {
-        await chrome.tabs.remove(id);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  }
+export function closeTabs(tabs: chrome.tabs.Tab[]) {
+  const ids = filterUndefined(tabs.map((tab) => tab.id));
+  const removePromises = ids.map((id) =>
+    chrome.tabs.remove(id).catch((error) => {
+      console.error(`Removing id ${id} failed: ${error}`);
+      return error;
+    }),
+  );
+  return Promise.allSettled(removePromises);
 }
 
 export async function focusOnTab(tab: chrome.tabs.Tab) {
@@ -80,6 +78,18 @@ export async function saveTabsToFolder(folderName: string, tabs: chrome.tabs.Tab
   }
 }
 
+export async function saveTabsToBookmarkTree(node: chrome.bookmarks.BookmarkTreeNode, tabs: chrome.tabs.Tab[]) {
+  const existingBookmarkUrls = new Set<string>();
+  for (const child of node.children ?? []) {
+    existingBookmarkUrls.add(child.url ?? "");
+  }
+  for (const tab of tabs) {
+    if (!existingBookmarkUrls.has(tab.url ?? "")) {
+      await chrome.bookmarks.create({ parentId: node.id, title: tab.title, url: tab.url });
+    }
+  }
+}
+
 export async function muteTab(tab: chrome.tabs.Tab) {
   const id = tab.id;
   if (id === undefined) {
@@ -119,6 +129,13 @@ function filterUndefined<T>(arr: (T | undefined)[]): T[] {
     }
   }
   return filtered;
+}
+
+export async function addTabsToExistingGroup(tabGroup: chrome.tabGroups.TabGroup, tabs: chrome.tabs.Tab[]) {
+  await chrome.tabs.group({
+    groupId: tabGroup.id,
+    tabIds: filterUndefined(tabs.map((tab) => tab.id)),
+  });
 }
 
 export async function createTabGroup(groupName: string, bookmarks: chrome.bookmarks.BookmarkTreeNode[]) {

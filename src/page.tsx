@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { Bookmarks } from "./Components/Bookmarks";
+import { Bookmarks } from "./components/Bookmarks";
 
 import "./tailwind.css";
 

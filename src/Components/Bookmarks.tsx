@@ -2,8 +2,10 @@ import { css, cx } from "@linaria/core";
 import { styled } from "@linaria/react";
 import { IconSquareX } from "@tabler/icons";
 import React, { useEffect, useState } from "react";
+import { filterUndefined } from "../utils";
 import { BookmarkTable } from "./BookmarkTable";
 import { TabGroup as TabGroupXXX } from "./TabGroup";
+import { TabTable, GroupOption } from "./TabTable";
 
 type BookmarkGroup = {
   id: string;
@@ -160,37 +162,37 @@ const fixedWidthNoScrollbar = css`
   }
 `;
 
-export const TabTable: React.FC<{ group: TabGroup }> = ({ group }) => {
-  return (
-    <div className="grid grid-cols-12">
-      {group.tabs.map((tab) => (
-        <>
-          <div key={`title-${tab.id}`} className={cx("col-span-9", fixedWidthNoScrollbar)}>
-            <a
-              href={tab.url}
-              target="_blank"
-              rel="noreferrer"
-              className={css`
-                display: inline-block;
-              `}
-            >
-              <FaviconImage src={tab.favIconUrl} className="h-4" />
-              {tab.title}
-            </a>
-          </div>
-          <div key={`link-${tab.id}`} className={cx("col-span-2", fixedWidthNoScrollbar)}>
-            {tab.url}
-          </div>
-          <div key={`close-${tab.id}`} className="col-span-1 h-4">
-            <button onClick={() => closeTab(tab)}>
-              <IconSquareX />
-            </button>
-          </div>
-        </>
-      ))}
-    </div>
-  );
-};
+// export const TabTable: React.FC<{ group: TabGroup }> = ({ group }) => {
+//   return (
+//     <div className="grid grid-cols-12">
+//       {group.tabs.map((tab) => (
+//         <>
+//           <div key={`title-${tab.id}`} className={cx("col-span-9", fixedWidthNoScrollbar)}>
+//             <a
+//               href={tab.url}
+//               target="_blank"
+//               rel="noreferrer"
+//               className={css`
+//                 display: inline-block;
+//               `}
+//             >
+//               <FaviconImage src={tab.favIconUrl} className="h-4" />
+//               {tab.title}
+//             </a>
+//           </div>
+//           <div key={`link-${tab.id}`} className={cx("col-span-2", fixedWidthNoScrollbar)}>
+//             {tab.url}
+//           </div>
+//           <div key={`close-${tab.id}`} className="h-4 col-span-1">
+//             <button onClick={() => closeTab(tab)}>
+//               <IconSquareX />
+//             </button>
+//           </div>
+//         </>
+//       ))}
+//     </div>
+//   );
+// };
 
 function getFaviconUrl(url: string): string {
   const urlObj = new URL(url);
@@ -304,11 +306,25 @@ export const Bookmarks: React.FC = () => {
   }, [bookmarkTree]);
 
   return (
-    <div className="bg-gray-200 grid place-items-center grid-cols-1 gap-y-4">
+    <div className="grid grid-cols-1 p-4 bg-gray-200 place-items-center gap-y-4">
       <div className="flex flex-col gap-y-4">
-        {[...tabGroups.entries()].map(([groupId, group]) => (
-          <TabGroupXXX groupName={group.tabGroup?.title ?? "Ungrouped"} tabs={group.tabs} onUpdate={() => updateTabs} />
-        ))}
+        {[...tabGroups.entries()].map(([groupId, group]) => {
+          const groupOptions: GroupOption[] = [];
+          for (const [_, group] of tabGroups) {
+            if (group.tabGroup !== undefined) {
+              groupOptions.push({ type: "tabGroup", value: group.tabGroup });
+            }
+          }
+          for (const [_, group] of bookmarkGroups) {
+            if (group.parent !== undefined) {
+              groupOptions.push({ type: "bookmarkFolder", value: group.parent });
+            }
+          }
+          return (
+            <TabTable groupName={group.tabGroup?.title ?? "Ungrouped"} tabs={group.tabs} groupOptions={groupOptions} />
+            // <TabGroupXXX groupName={group.tabGroup?.title ?? "Ungrouped"} tabs={group.tabs} onUpdate={() => updateTabs} />
+          );
+        })}
       </div>
       <div className="flex flex-col gap-y-4">
         {[...bookmarkGroups.entries()].map(([groupId, group]) => (
@@ -319,18 +335,18 @@ export const Bookmarks: React.FC = () => {
   );
 };
 
-// <div className="flex flex-col min-w-200 w-full lg:max-w-screen-lg">
+// <div className="flex flex-col w-full min-w-200 lg:max-w-screen-lg">
 //   {/* <TabGroupTableCombined tabGroupInit={tabGroups} /> */}
 //   {[...tabGroups.entries()].map(([groupId, group]) => (
-//     <div key={groupId} className="rounded-md p-2 m-2 border border-gray-300 bg-white">
+//     <div key={groupId} className="p-2 m-2 bg-white border border-gray-300 rounded-md">
 //       <div className="flex">
-//         <div className="flex-1 justify-start">
+//         <div className="justify-start flex-1">
 //           <h1 className="text-base">{group.tabGroup?.title ?? "Ungrouped"}</h1>
 //         </div>
 //         <div className="justify-end">
 //           <div>
 //             <button
-//               className="text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
+//               className="px-2 text-base text-white bg-blue-500 rounded-md hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800"
 //               onClick={() => saveAndCloseTabGroup(group)}
 //             >
 //               Bookmark
@@ -343,22 +359,22 @@ export const Bookmarks: React.FC = () => {
 //     </div>
 //   ))}
 // </div>
-// <div className="flex flex-col min-w-200 w-full lg:max-w-screen-lg">
+// <div className="flex flex-col w-full min-w-200 lg:max-w-screen-lg">
 //   {[...bookmarkGroups.entries()].map(([i, group]) => (
-//     <div key={i} className="rounded-md p-2 m-2 border border-gray-300 bg-white">
+//     <div key={i} className="p-2 m-2 bg-white border border-gray-300 rounded-md">
 //       <div className="flex">
-//         <div className="flex-1 justify-start">
+//         <div className="justify-start flex-1">
 //           <h1 className="text-base">{group.path.join(" > ")}</h1>
 //         </div>
 //         <div className="justify-end">
 //           <button
-//             className="mx-2 text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
+//             className="px-2 mx-2 text-base text-white bg-blue-500 rounded-md hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800"
 //             onClick={() => createTabGroup(group.title, group.bookmarks)}
 //           >
 //             Create Tab Group
 //           </button>
 //           <button
-//             className="mx-2 text-base bg-blue-500 hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800 text-white rounded-md px-2"
+//             className="px-2 mx-2 text-base text-white bg-blue-500 rounded-md hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800"
 //             onClick={() => deleteBookmarks(group)}
 //           >
 //             Delete Bookmarks
