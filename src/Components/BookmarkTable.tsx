@@ -18,16 +18,6 @@ import { Favicon } from "./FaviconImage";
 
 type Bookmark = chrome.bookmarks.BookmarkTreeNode;
 
-// // expands object types one level deep
-// type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
-
-// // expands object types recursively
-// type ExpandRecursively<T> = T extends object
-//   ? T extends infer O ? { [K in keyof O]: ExpandRecursively<O[K]> } : never
-//   : T;
-
-// type Test<TData extends RowData, TValue = unknown> = ExpandRecursively<DisplayColumnDef<TData, TValue>>
-
 const IndeterminateCheckbox: React.FC<
   {
     indeterminate?: boolean;

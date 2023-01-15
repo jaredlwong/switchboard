@@ -31,3 +31,15 @@ export function relativeTimeFromElapsed(elapsed: number): string {
   }
   return "";
 }
+
+/**
+ * Get the first emoji in a string.
+ */
+export function extractLeadingEmoji(text?: string): string | undefined {
+  const match = text?.match(/^(\p{Emoji}\uFE0F|\p{Emoji_Presentation})/gu);
+  return match ? match[0] : undefined;
+}
+
+export function stripLeadingEmoji(text?: string): string | undefined {
+  return text?.replace(/^(\p{Emoji}\uFE0F|\p{Emoji_Presentation}) */gu, "");
+}

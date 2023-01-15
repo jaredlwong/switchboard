@@ -1,10 +1,9 @@
-import { cx } from "@linaria/core";
+import data from "@emoji-mart/data";
+import Picker from "@emoji-mart/react";
+import { css, cx } from "@linaria/core";
 import {
-  IconCaretDown,
   IconFolderMinus,
-  IconFolderPlus,
   IconLayoutGridAdd,
-  IconMinusVertical,
   IconSortAscending,
   IconSortDescending,
   IconTrash,
@@ -22,16 +21,20 @@ import {
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import React, { HTMLProps, useEffect, useId, useMemo, useState } from "react";
+import { debounce } from "lodash";
+import React, { HTMLProps, useCallback, useEffect, useMemo, useState } from "react";
 import {
   addTabsToExistingGroup,
+  changeTabGroupName,
   closeTab,
   closeTabs,
+  focusOnTab,
   muteTab,
   saveTabsToBookmarkTree,
   saveTabsToFolder,
   unmuteTab,
 } from "../utils/chrome";
+import { extractLeadingEmoji, stripLeadingEmoji } from "../utils/data";
 import { Favicon } from "./FaviconImage";
 
 const IndeterminateCheckbox: React.FC<
@@ -80,15 +83,18 @@ export type GroupOption =
   | { type: "bookmarkFolder"; value: chrome.bookmarks.BookmarkTreeNode };
 
 interface Props {
-  groupName: string;
+  tabGroup?: chrome.tabGroups.TabGroup;
   tabs: chrome.tabs.Tab[];
   groupOptions: GroupOption[];
 }
 
-export const TabTable: React.FC<Props> = ({ groupName, tabs, groupOptions }) => {
+export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [sorting, setSorting] = useState<SortingState>([]);
   const [selectedGroup, setSelectedGroup] = useState<GroupOption | undefined>(undefined);
+  const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
+  const [groupEmoji, setGroupEmoji] = useState<string | undefined>(undefined);
+  const [groupTextName, setGroupTextName] = useState<string | undefined>(undefined);
 
   type Link = { url: string; title: string };
 
@@ -183,7 +189,7 @@ export const TabTable: React.FC<Props> = ({ groupName, tabs, groupOptions }) => 
   };
 
   const bookmarkGroupInternal = async () => {
-    await saveTabsToFolder(groupName, tabs);
+    await saveTabsToFolder(tabGroup?.title ?? "Ungrouped", tabs);
     await closeTabs(tabs);
   };
 
@@ -206,15 +212,71 @@ export const TabTable: React.FC<Props> = ({ groupName, tabs, groupOptions }) => 
   };
 
   useEffect(() => {
+    // this is the top-left selection
     setSelectedGroup(groupOptions[0]);
+    // this is the group name
+    const emoji = extractLeadingEmoji(tabGroup?.title);
+    setGroupEmoji(emoji ? emoji : undefined);
+    setGroupTextName(stripLeadingEmoji(tabGroup?.title));
   }, []);
+
+  // update group name
+  useEffect(() => {
+    const groupName = groupEmoji ? `${groupEmoji} ${groupTextName}` : groupTextName ?? "";
+    if (tabGroup) {
+      console.log(`changing group name to ${groupName}`);
+      changeTabGroupName(tabGroup, groupName);
+    }
+  }, [groupEmoji, groupTextName]);
+
+  const handleGroupTextNameChange = useCallback(
+    debounce((e: React.FormEvent<HTMLSpanElement>) => {
+      const newName = (e.target as HTMLElement).innerText;
+      setGroupTextName(newName);
+    }, 500),
+    [],
+  );
+
+  const handleEmojiPickerClicked = () => {
+    setShowEmojiPicker(!showEmojiPicker);
+  };
+
+  const handleEmojiSelected = (emoji: any) => {
+    // todo handle ungrouped
+    setGroupEmoji(emoji.native);
+    setShowEmojiPicker(false);
+  };
 
   return (
     // <div className="p-2 min-w-[200px] lg:max-w-6xl">
     <div className="p-2 min-w-[200px] w-screen lg:max-w-6xl flex flex-col rounded-xl border border-solid border-slate-200 bg-white items-start gap-2.5 drop-shadow-md">
       <div className="flex flex-row w-full">
         <div className="flex flex-row items-center gap-x-2 grow">
-          <span className="font-sans text-base font-semibold text-slate-800">{groupName}</span>
+          <div className="flex items-center gap-0 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200">
+            <button className="font-sans text-sm font-semibold text-slate-800" onClick={handleEmojiPickerClicked}>
+              {groupEmoji ?? "☺"}
+            </button>
+            {showEmojiPicker && (
+              <div
+                className={css`
+                  position: absolute;
+                  top: 40px;
+                  left: 10px;
+                `}
+              >
+                <Picker data={data} onEmojiSelect={handleEmojiSelected} />
+              </div>
+            )}
+            <div className="w-0 h-4 mx-1.5 border border-slate-400 rounded-t rounded-b" />
+            <span
+              className="font-sans text-sm font-semibold text-slate-800 min-w-[5px]"
+              contentEditable={true}
+              onInput={handleGroupTextNameChange}
+              suppressContentEditableWarning={true}
+            >
+              {groupTextName ?? "Ungrouped"}
+            </span>
+          </div>
           <div className="flex items-center p-1 rounded-2xl bg-violet-50">
             <span className="px-1 text-xs font-semibold leading-4 text-center text-violet-700">{tabs.length} tabs</span>
           </div>
@@ -241,7 +303,7 @@ export const TabTable: React.FC<Props> = ({ groupName, tabs, groupOptions }) => 
               <select className="bg-indigo-100 cursor-pointer" onChange={handleSelectionChange}>
                 {groupOptions.map((group, index) => (
                   <option key={index} value={index}>
-                    {group.value.title}
+                    {group.type === "bookmarkFolder" ? `📚 ${group.value.title}` : `📁 ${group.value.title}`}
                   </option>
                 ))}
               </select>
@@ -297,9 +359,12 @@ export const TabTable: React.FC<Props> = ({ groupName, tabs, groupOptions }) => 
                       <div className="flex flex-no-wrap pl-1.5 min-w-0 items-center hover:underline cursor-pointer">
                         <Favicon url={cell.getValue<Link>().url} />
                         {/* <span className="inline-block min-w-0 overflow-scroll whitespace-nowrap scrollbar-hide"> */}
-                        <span>
-                          {cell.getValue<Link>().title}
+                        <span onClick={() => focusOnTab(cell.row.original)}>
+                          {/* {cell.getValue<Link>().title} */}
                           {/* {flexRender(cell.column.columnDef.cell, cell.getContext())} */}
+                          {/* <a href={cell.getValue<Link>().url} target="_blank" rel="noreferrer"> */}
+                          {cell.getValue<Link>().title}
+                          {/* </a> */}
                         </span>
                       </div>
                     </td>

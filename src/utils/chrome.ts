@@ -156,3 +156,7 @@ export async function createTabGroup(groupName: string, bookmarks: chrome.bookma
   });
   await chrome.tabGroups.update(groupId, { collapsed: false, title: groupName });
 }
+
+export async function changeTabGroupName(group: chrome.tabGroups.TabGroup, newName: string) {
+  await chrome.tabGroups.update(group.id, { title: newName });
+}

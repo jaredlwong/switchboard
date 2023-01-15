@@ -1,8 +1,8 @@
-import { join } from "path";
 import CopyPlugin from "copy-webpack-plugin";
-import * as webpack from "webpack";
 import ESLintPlugin from "eslint-webpack-plugin";
 import ForkTsCheckerWebpackPlugin from "fork-ts-checker-webpack-plugin";
+import { join } from "path";
+import * as webpack from "webpack";
 
 const srcDir = join(__dirname, "src");
 

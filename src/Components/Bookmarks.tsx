@@ -1,11 +1,6 @@
-import { css, cx } from "@linaria/core";
-import { styled } from "@linaria/react";
-import { IconSquareX } from "@tabler/icons";
 import React, { useEffect, useState } from "react";
-import { filterUndefined } from "../utils";
 import { BookmarkTable } from "./BookmarkTable";
-import { TabGroup as TabGroupXXX } from "./TabGroup";
-import { TabTable, GroupOption } from "./TabTable";
+import { GroupOption, TabTable } from "./TabTable";
 
 type BookmarkGroup = {
   id: string;
@@ -75,157 +70,6 @@ function groupTabs(tabGroups: chrome.tabGroups.TabGroup[], tabs: chrome.tabs.Tab
   }
   return sortMapByKey(groups);
 }
-
-async function saveTabsToFolder(tabGroup: TabGroup) {
-  let folderId: string | undefined;
-  // Check if a bookmark folder with the given name already exists
-  const folderName = tabGroup.tabGroup?.title ?? "Ungrouped";
-  const searchResults = await chrome.bookmarks.search({ title: folderName });
-  if (searchResults.length === 0) {
-    // Create a new bookmark folder if it doesn't exist
-    const newFolder = await chrome.bookmarks.create({ title: folderName });
-    console.log("new folder");
-    folderId = newFolder.id;
-  } else {
-    // If the folder already exists, use its ID
-    folderId = searchResults[0].id;
-    console.log(`existing folder ${searchResults}`);
-  }
-  console.log(`saving tab group ${folderName} ${folderId}`);
-
-  // Save each tab as a bookmark into the folder
-  for (const tab of tabGroup.tabs) {
-    await chrome.bookmarks.create({ parentId: folderId, title: tab.title, url: tab.url });
-  }
-}
-
-async function saveAndCloseTabGroup(tabGroup: TabGroup) {
-  await saveTabsToFolder(tabGroup);
-  const tabIds = tabGroup.tabs.map((tab) => tab.id).filter((id) => id !== undefined) as number[];
-  await chrome.tabs.remove(tabIds);
-}
-
-async function createTabGroup(groupName: string, bookmarks: chrome.bookmarks.BookmarkTreeNode[]) {
-  const tabs: chrome.tabs.Tab[] = [];
-  for (const bookmark of bookmarks) {
-    tabs.push(
-      await chrome.tabs.create({
-        active: false,
-        url: bookmark.url,
-      }),
-    );
-  }
-  const groupId = await chrome.tabs.group({
-    tabIds: tabs.map((tab) => tab.id).flatMap((e) => (e === undefined ? [] : [e])),
-  });
-  await chrome.tabGroups.update(groupId, { collapsed: false, title: groupName });
-}
-
-async function deleteBookmarks(group: BookmarkGroup) {
-  const bookmarkIds = group.bookmarks.map((bookmark) => bookmark.id).flatMap((e) => (e === undefined ? [] : [e]));
-  for (const id of bookmarkIds) {
-    await chrome.bookmarks.remove(id);
-  }
-  const children = await chrome.bookmarks.getSubTree(group.id);
-  if (children.length === 0) {
-    await chrome.bookmarks.remove(group.id);
-  }
-}
-
-async function closeTab(tab: chrome.tabs.Tab): Promise<void> {
-  const id = tab.id;
-  if (id !== undefined) {
-    await chrome.tabs.remove(id);
-  }
-}
-
-const FaviconImage = styled.img`
-  /* width: 16px;
-  height: 16px; */
-  display: inline-block;
-  margin: 0 4px;
-`;
-
-// const BookmarkLink = styled.a`
-const fixedWidthNoScrollbar = css`
-  // text-overflow: ellipsis;
-  // white-space: nowrap;
-  display: inline-block;
-  white-space: nowrap;
-  overflow: scroll;
-
-  // hide scroll bars
-  -ms-overflow-style: none; /* Internet Explorer 10+ */
-  scrollbar-width: none; /* Firefox */
-  ::-webkit-scrollbar {
-    display: none; /* Safari and Chrome */
-  }
-`;
-
-// export const TabTable: React.FC<{ group: TabGroup }> = ({ group }) => {
-//   return (
-//     <div className="grid grid-cols-12">
-//       {group.tabs.map((tab) => (
-//         <>
-//           <div key={`title-${tab.id}`} className={cx("col-span-9", fixedWidthNoScrollbar)}>
-//             <a
-//               href={tab.url}
-//               target="_blank"
-//               rel="noreferrer"
-//               className={css`
-//                 display: inline-block;
-//               `}
-//             >
-//               <FaviconImage src={tab.favIconUrl} className="h-4" />
-//               {tab.title}
-//             </a>
-//           </div>
-//           <div key={`link-${tab.id}`} className={cx("col-span-2", fixedWidthNoScrollbar)}>
-//             {tab.url}
-//           </div>
-//           <div key={`close-${tab.id}`} className="h-4 col-span-1">
-//             <button onClick={() => closeTab(tab)}>
-//               <IconSquareX />
-//             </button>
-//           </div>
-//         </>
-//       ))}
-//     </div>
-//   );
-// };
-
-function getFaviconUrl(url: string): string {
-  const urlObj = new URL(url);
-  return `https://www.google.com/s2/favicons?domain=${urlObj.hostname}`;
-  // http://www.google.com/profiles/c/favicons?domain=targetsite.com
-}
-
-export const BookmarkTable2: React.FC<{ group: BookmarkGroup }> = ({ group }) => {
-  return (
-    <div className="grid grid-cols-12">
-      {group.bookmarks.map((bookmark) => (
-        <>
-          <div key={`title-${bookmark.id}`} className={cx("col-span-9", fixedWidthNoScrollbar)}>
-            <a
-              href={bookmark.url}
-              target="_blank"
-              rel="noreferrer"
-              className={css`
-                display: inline-block;
-              `}
-            >
-              <FaviconImage src={getFaviconUrl(bookmark.url ?? "")} />
-              {bookmark.title}
-            </a>
-          </div>
-          <div key={`link-${bookmark.id}`} className={cx("col-span-2", fixedWidthNoScrollbar)}>
-            {bookmark.url}
-          </div>
-        </>
-      ))}
-    </div>
-  );
-};
 
 export const Bookmarks: React.FC = () => {
   const [tabs, setTabs] = useState<chrome.tabs.Tab[]>([]);
@@ -321,7 +165,7 @@ export const Bookmarks: React.FC = () => {
             }
           }
           return (
-            <TabTable groupName={group.tabGroup?.title ?? "Ungrouped"} tabs={group.tabs} groupOptions={groupOptions} />
+            <TabTable tabGroup={group.tabGroup} tabs={group.tabs} groupOptions={groupOptions} />
             // <TabGroupXXX groupName={group.tabGroup?.title ?? "Ungrouped"} tabs={group.tabs} onUpdate={() => updateTabs} />
           );
         })}
@@ -334,55 +178,3 @@ export const Bookmarks: React.FC = () => {
     </div>
   );
 };
-
-// <div className="flex flex-col w-full min-w-200 lg:max-w-screen-lg">
-//   {/* <TabGroupTableCombined tabGroupInit={tabGroups} /> */}
-//   {[...tabGroups.entries()].map(([groupId, group]) => (
-//     <div key={groupId} className="p-2 m-2 bg-white border border-gray-300 rounded-md">
-//       <div className="flex">
-//         <div className="justify-start flex-1">
-//           <h1 className="text-base">{group.tabGroup?.title ?? "Ungrouped"}</h1>
-//         </div>
-//         <div className="justify-end">
-//           <div>
-//             <button
-//               className="px-2 text-base text-white bg-blue-500 rounded-md hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800"
-//               onClick={() => saveAndCloseTabGroup(group)}
-//             >
-//               Bookmark
-//             </button>
-//           </div>
-//         </div>
-//       </div>
-//       <TabTable group={group} />
-//       {/* <TabGroupTableDense tabs={group.tabs.map((tab) => ({ tab }))} /> */}
-//     </div>
-//   ))}
-// </div>
-// <div className="flex flex-col w-full min-w-200 lg:max-w-screen-lg">
-//   {[...bookmarkGroups.entries()].map(([i, group]) => (
-//     <div key={i} className="p-2 m-2 bg-white border border-gray-300 rounded-md">
-//       <div className="flex">
-//         <div className="justify-start flex-1">
-//           <h1 className="text-base">{group.path.join(" > ")}</h1>
-//         </div>
-//         <div className="justify-end">
-//           <button
-//             className="px-2 mx-2 text-base text-white bg-blue-500 rounded-md hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800"
-//             onClick={() => createTabGroup(group.title, group.bookmarks)}
-//           >
-//             Create Tab Group
-//           </button>
-//           <button
-//             className="px-2 mx-2 text-base text-white bg-blue-500 rounded-md hover:bg-blue-600 focus:bg-blue-700 active:bg-blue-800"
-//             onClick={() => deleteBookmarks(group)}
-//           >
-//             Delete Bookmarks
-//           </button>
-//         </div>
-//       </div>
-//       <BookmarkTable2 group={group} />
-//       {/* <BookmarkTable path={group.path ?? []} bookmarks={group.bookmarks} /> */}
-//     </div>
-//   ))}
-// </div>
