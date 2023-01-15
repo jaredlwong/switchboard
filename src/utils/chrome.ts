@@ -1,3 +1,5 @@
+import { filterUndefined, sleep } from "./data";
+
 export function closeTabs(tabs: chrome.tabs.Tab[]) {
   const ids = filterUndefined(tabs.map((tab) => tab.id));
   const removePromises = ids.map((id) =>
@@ -78,6 +80,48 @@ export async function saveTabsToFolder(folderName: string, tabs: chrome.tabs.Tab
   }
 }
 
+export async function moveBookmarksToFolder(
+  node: chrome.bookmarks.BookmarkTreeNode,
+  bookmarks: chrome.bookmarks.BookmarkTreeNode[],
+) {
+  const promises = bookmarks.map((bookmark) =>
+    chrome.bookmarks.move(bookmark.id, { parentId: node.id }).catch((error) => {
+      console.error(`Moving bookmark ${bookmark.id} failed: ${error}`);
+      return error;
+    }),
+  );
+  return Promise.allSettled(promises);
+}
+
+export async function openBookmarksInTabGroup(
+  tabGroup: chrome.tabGroups.TabGroup,
+  bookmarks: chrome.bookmarks.BookmarkTreeNode[],
+) {
+  const promises = bookmarks.map((bookmark) =>
+    chrome.tabs
+      .create({
+        active: false,
+        url: bookmark.url,
+      })
+      .catch((e) => {
+        console.error(`Error creating tab for bookmark ${bookmark.id}: ${e}`);
+        return undefined;
+      }),
+  );
+  try {
+    const results = await Promise.allSettled(promises);
+    const tabIds: number[] = [];
+    results.map((tab) => {
+      if (tab.status === "fulfilled" && tab.value?.id !== undefined) {
+        tabIds.push(tab.value?.id);
+      }
+    });
+    await chrome.tabs.group({ groupId: tabGroup.id, tabIds });
+  } catch (e) {
+    console.error(`Error creating tabs for bookmarks: ${e}`);
+  }
+}
+
 export async function saveTabsToBookmarkTree(node: chrome.bookmarks.BookmarkTreeNode, tabs: chrome.tabs.Tab[]) {
   const existingBookmarkUrls = new Set<string>();
   for (const child of node.children ?? []) {
@@ -121,16 +165,6 @@ export async function deleteBookmarks(bookmarks: chrome.bookmarks.BookmarkTreeNo
   await Promise.all(promises);
 }
 
-function filterUndefined<T>(arr: (T | undefined)[]): T[] {
-  const filtered: T[] = [];
-  for (const e of arr) {
-    if (e !== undefined) {
-      filtered.push(e);
-    }
-  }
-  return filtered;
-}
-
 export async function addTabsToExistingGroup(tabGroup: chrome.tabGroups.TabGroup, tabs: chrome.tabs.Tab[]) {
   await chrome.tabs.group({
     groupId: tabGroup.id,
@@ -152,11 +186,19 @@ export async function createTabGroup(groupName: string, bookmarks: chrome.bookma
   );
   const tabs: chrome.tabs.Tab[] = filterUndefined(await Promise.all(promises));
   const groupId = await chrome.tabs.group({
-    tabIds: tabs.map((tab) => tab.id).flatMap((e) => (e === undefined ? [] : [e])),
+    tabIds: filterUndefined(tabs.map((tab) => tab.id)),
   });
-  await chrome.tabGroups.update(groupId, { collapsed: false, title: groupName });
+  await sleep(100);
+  await chrome.tabGroups.update(groupId, { title: groupName });
 }
 
 export async function changeTabGroupName(group: chrome.tabGroups.TabGroup, newName: string) {
   await chrome.tabGroups.update(group.id, { title: newName });
+}
+
+export async function changeBookmarkFolderName(folder: chrome.bookmarks.BookmarkTreeNode, newName: string) {
+  // don't rename the root folder or the bookmark bar or other bookmarks
+  if (folder.id && Number(folder.id) > 2) {
+    await chrome.bookmarks.update(folder.id, { title: newName });
+  }
 }

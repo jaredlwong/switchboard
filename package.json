@@ -65,6 +65,7 @@
     "@emoji-mart/data": "^1.1.1",
     "@emoji-mart/react": "^1.1.1",
     "@extend-chrome/messages": "^1.2.2",
+    "@heroicons/react": "^2.0.13",
     "@linaria/core": "^4.2.5",
     "@linaria/react": "^4.3.3",
     "@tabler/icons": "^1.119.0",

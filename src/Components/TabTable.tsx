@@ -1,15 +1,8 @@
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
-import { css, cx } from "@linaria/core";
-import {
-  IconFolderMinus,
-  IconLayoutGridAdd,
-  IconSortAscending,
-  IconSortDescending,
-  IconTrash,
-  IconVolume,
-  IconVolumeOff,
-} from "@tabler/icons";
+import { BookmarkSquareIcon, FaceSmileIcon, SquaresPlusIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { cx } from "@linaria/core";
+import { IconSortAscending, IconSortDescending, IconTrash, IconVolume, IconVolumeOff } from "@tabler/icons";
 import {
   ColumnDef,
   flexRender,
@@ -36,6 +29,7 @@ import {
 } from "../utils/chrome";
 import { extractLeadingEmoji, stripLeadingEmoji } from "../utils/data";
 import { Favicon } from "./FaviconImage";
+import { GroupOption } from "./shared";
 
 const IndeterminateCheckbox: React.FC<
   {
@@ -77,10 +71,6 @@ const MuteButton: React.FC<{ tab: chrome.tabs.Tab }> = ({ tab }) => {
     </div>
   );
 };
-
-export type GroupOption =
-  | { type: "tabGroup"; value: chrome.tabGroups.TabGroup }
-  | { type: "bookmarkFolder"; value: chrome.bookmarks.BookmarkTreeNode };
 
 interface Props {
   tabGroup?: chrome.tabGroups.TabGroup;
@@ -177,9 +167,9 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
     getSortedRowModel: getSortedRowModel(),
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    debugTable: true,
-    debugHeaders: true,
-    debugColumns: true,
+    // debugTable: true,
+    // debugHeaders: true,
+    // debugColumns: true,
   });
 
   const closeSelectedTabs = async () => {
@@ -214,17 +204,24 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
   useEffect(() => {
     // this is the top-left selection
     setSelectedGroup(groupOptions[0]);
+  }, []);
+
+  useEffect(() => {
     // this is the group name
     const emoji = extractLeadingEmoji(tabGroup?.title);
-    setGroupEmoji(emoji ? emoji : undefined);
-    setGroupTextName(stripLeadingEmoji(tabGroup?.title));
-  }, []);
+    if (emoji !== groupEmoji) {
+      setGroupEmoji(emoji ? emoji : undefined);
+    }
+    const textName = stripLeadingEmoji(tabGroup?.title);
+    if (textName !== groupTextName) {
+      setGroupTextName(textName);
+    }
+  }, [tabGroup]);
 
   // update group name
   useEffect(() => {
     const groupName = groupEmoji ? `${groupEmoji} ${groupTextName}` : groupTextName ?? "";
     if (tabGroup) {
-      console.log(`changing group name to ${groupName}`);
       changeTabGroupName(tabGroup, groupName);
     }
   }, [groupEmoji, groupTextName]);
@@ -248,23 +245,21 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
   };
 
   return (
-    // <div className="p-2 min-w-[200px] lg:max-w-6xl">
-    <div className="p-2 min-w-[200px] w-screen lg:max-w-6xl flex flex-col rounded-xl border border-solid border-slate-200 bg-white items-start gap-2.5 drop-shadow-md">
+    <div className="p-2 min-w-[200px] w-screen lg:max-w-6xl flex flex-col rounded-xl border border-solid border-slate-200 bg-white items-start gap-2.5 shadow-md">
+      {/* fucking hell doesn't work with floating div */}
+      {/* https://coder-coder.com/z-index-isnt-working/ */}
+      {/* drop-shadow-md */}
       <div className="flex flex-row w-full">
         <div className="flex flex-row items-center gap-x-2 grow">
           <div className="flex items-center gap-0 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200">
             <button className="font-sans text-sm font-semibold text-slate-800" onClick={handleEmojiPickerClicked}>
-              {groupEmoji ?? "☺"}
+              {groupEmoji ?? <FaceSmileIcon className="w-4 h-4" />}
             </button>
             {showEmojiPicker && (
-              <div
-                className={css`
-                  position: absolute;
-                  top: 40px;
-                  left: 10px;
-                `}
-              >
-                <Picker data={data} onEmojiSelect={handleEmojiSelected} />
+              <div className="relative">
+                <div className="absolute top-5 -left-6">
+                  <Picker data={data} onEmojiSelect={handleEmojiSelected} />
+                </div>
               </div>
             )}
             <div className="w-0 h-4 mx-1.5 border border-slate-400 rounded-t rounded-b" />
@@ -287,7 +282,8 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
               className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
               onClick={bookmarkGroupInternal}
             >
-              <IconFolderMinus size={16} /> Bookmark Group
+              <BookmarkSquareIcon className="w-4 h-4" />
+              Bookmark Group
             </button>
           </div>
           <div className="flex flex-row items-center justify-end">
@@ -295,7 +291,7 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
               className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
               onClick={closeSelectedTabs}
             >
-              <IconTrash size={16} /> Close Tabs
+              <TrashIcon className="w-4 h-4" /> Close Tabs
             </button>
           </div>
           <div className="flex flex-row items-center justify-end">
@@ -303,13 +299,13 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
               <select className="bg-indigo-100 cursor-pointer" onChange={handleSelectionChange}>
                 {groupOptions.map((group, index) => (
                   <option key={index} value={index}>
-                    {group.type === "bookmarkFolder" ? `📚 ${group.value.title}` : `📁 ${group.value.title}`}
+                    {group.type === "bookmarkFolder" ? `${group.value.title}` : `${group.value.title}`}
                   </option>
                 ))}
               </select>
               <div className="w-0 h-4 mx-1.5 border border-slate-400 rounded-t rounded-b" />
               <button onClick={saveTabsToGroup}>
-                <IconLayoutGridAdd size={16} />
+                <SquaresPlusIcon className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -355,7 +351,7 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
               {row.getVisibleCells().map((cell) => {
                 if (cell.column.id === "title") {
                   return (
-                    <td className="h-6 border-b border-b-slate-300">
+                    <td key={cell.id} className="h-6 border-b border-b-slate-300">
                       <div className="flex flex-no-wrap pl-1.5 min-w-0 items-center hover:underline cursor-pointer">
                         <Favicon url={cell.getValue<Link>().url} />
                         {/* <span className="inline-block min-w-0 overflow-scroll whitespace-nowrap scrollbar-hide"> */}

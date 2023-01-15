@@ -1,5 +1,8 @@
+import data from "@emoji-mart/data";
+import Picker from "@emoji-mart/react";
+import { FaceSmileIcon, FolderPlusIcon, SquaresPlusIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { cx } from "@linaria/core";
-import { IconFolderPlus, IconSortAscending, IconSortDescending, IconTrash } from "@tabler/icons";
+import { IconSortAscending, IconSortDescending } from "@tabler/icons";
 import {
   ColumnDef,
   flexRender,
@@ -11,10 +14,18 @@ import {
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import React, { HTMLProps, useMemo, useState } from "react";
-import { createTabGroup, deleteBookmarks } from "../utils/chrome";
-import { relativeTimeFromDates } from "../utils/data";
+import { debounce } from "lodash";
+import React, { HTMLProps, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  changeBookmarkFolderName,
+  createTabGroup,
+  deleteBookmarks,
+  moveBookmarksToFolder,
+  openBookmarksInTabGroup,
+} from "../utils/chrome";
+import { extractLeadingEmoji, relativeTimeFromDates, stripLeadingEmoji } from "../utils/data";
 import { Favicon } from "./FaviconImage";
+import { GroupOption } from "./shared";
 
 type Bookmark = chrome.bookmarks.BookmarkTreeNode;
 
@@ -35,9 +46,38 @@ const IndeterminateCheckbox: React.FC<
   return <input type="checkbox" ref={ref} className={cx(className, "cursor-pointer")} {...props} />;
 };
 
-export const BookmarkTable: React.FC<{ parent: Bookmark; bookmarks: Bookmark[] }> = ({ parent, bookmarks }) => {
+interface Props {
+  parent: Bookmark;
+  bookmarks: Bookmark[];
+  groupOptions: GroupOption[];
+  refreshCallback: () => void;
+}
+
+export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupOptions, refreshCallback }) => {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [selectedGroup, setSelectedGroup] = useState<GroupOption | undefined>(undefined);
+  const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
+  const [groupEmoji, setGroupEmoji] = useState<string | undefined>(undefined);
+  const [groupTextName, setGroupTextName] = useState<string | undefined>(undefined);
+  const [groupNameFull, setGroupNameFull] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    // this is the top-left selection
+    setSelectedGroup(groupOptions[0]);
+  }, []);
+
+  useEffect(() => {
+    // this is the group name
+    const emoji = extractLeadingEmoji(parent.title);
+    if (emoji !== groupEmoji) {
+      setGroupEmoji(emoji ? emoji : undefined);
+    }
+    const textName = stripLeadingEmoji(parent.title);
+    if (textName !== groupTextName) {
+      setGroupTextName(textName);
+    }
+  }, []);
 
   type Link = { url: string; title: string };
 
@@ -100,9 +140,9 @@ export const BookmarkTable: React.FC<{ parent: Bookmark; bookmarks: Bookmark[] }
     getSortedRowModel: getSortedRowModel(),
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    debugTable: true,
-    debugHeaders: true,
-    debugColumns: true,
+    // debugTable: true,
+    // debugHeaders: true,
+    // debugColumns: true,
   });
 
   const deleteSelectedBookmarks = async () => {
@@ -111,16 +151,85 @@ export const BookmarkTable: React.FC<{ parent: Bookmark; bookmarks: Bookmark[] }
     await deleteBookmarks(bookmarks);
   };
 
-  const openBookmarks = async () => {
-    await createTabGroup(parent.title, bookmarks);
+  const openBookmarks = useCallback(async () => {
+    await createTabGroup(groupNameFull ?? "", bookmarks);
+    // refreshCallback();
+  }, [groupNameFull]);
+
+  const handleSelectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedGroup(groupOptions[Number(event.target.value)]);
+  };
+
+  const saveTabsToGroup = async () => {
+    if (selectedGroup === undefined) {
+      return;
+    }
+    const bookmarks = table.getSelectedRowModel().flatRows.map((row) => row.original);
+    if (selectedGroup.type === "bookmarkFolder") {
+      setRowSelection({});
+      await moveBookmarksToFolder(selectedGroup.value, bookmarks);
+    } else if (selectedGroup.type === "tabGroup") {
+      await openBookmarksInTabGroup(selectedGroup.value, bookmarks);
+    }
+  };
+
+  // update group name
+  useEffect(() => {
+    const groupName = groupEmoji ? `${groupEmoji} ${groupTextName}` : groupTextName ?? "";
+    if (groupName === groupNameFull) {
+      return;
+    }
+    setGroupNameFull(groupName);
+    changeBookmarkFolderName(parent, groupName);
+  }, [groupEmoji, groupTextName]);
+
+  const handleGroupTextNameChange = useCallback(
+    debounce((e: React.FormEvent<HTMLSpanElement>) => {
+      const newName = (e.target as HTMLElement).innerText;
+      setGroupTextName(newName);
+    }, 500),
+    [],
+  );
+
+  const handleEmojiPickerClicked = () => {
+    setShowEmojiPicker(!showEmojiPicker);
+  };
+
+  const handleEmojiSelected = (emoji: any) => {
+    // todo handle ungrouped
+    setGroupEmoji(emoji.native);
+    setShowEmojiPicker(false);
   };
 
   return (
-    // <div className="p-2 min-w-[200px] lg:max-w-6xl">
-    <div className="p-2 min-w-[200px] w-screen lg:max-w-6xl flex flex-col rounded-xl border border-solid border-slate-200 bg-white items-start gap-2.5 drop-shadow-md">
+    <div className="p-2 min-w-[200px] w-screen lg:max-w-6xl flex flex-col rounded-xl border border-solid border-slate-200 bg-white items-start gap-2.5 shadow-md">
+      {/* fucking hell doesn't work with floating div */}
+      {/* https://coder-coder.com/z-index-isnt-working/ */}
+      {/* drop-shadow-md */}
       <div className="flex flex-row w-full">
         <div className="flex flex-row items-center gap-x-2 grow">
-          <span className="font-sans text-base font-semibold text-slate-800">{parent.title}</span>
+          <div className="flex items-center gap-0 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200">
+            <button className="font-sans text-sm font-semibold text-slate-800" onClick={handleEmojiPickerClicked}>
+              {groupEmoji ?? <FaceSmileIcon className="w-4 h-4" />}
+            </button>
+            {showEmojiPicker && (
+              <div className="relative">
+                <div className="absolute top-5 -left-6">
+                  <Picker data={data} onEmojiSelect={handleEmojiSelected} />
+                </div>
+              </div>
+            )}
+            <div className="w-0 h-4 mx-1.5 border border-slate-400 rounded-t rounded-b" />
+            <span
+              className="font-sans text-sm font-semibold text-slate-800 min-w-[5px]"
+              contentEditable={true}
+              onInput={handleGroupTextNameChange}
+              suppressContentEditableWarning={true}
+            >
+              {groupTextName ?? "Ungrouped"}
+            </span>
+          </div>
+          {/* <span className="font-sans text-base font-semibold text-slate-800">{parent.title}</span> */}
           <div className="flex items-center p-1 rounded-2xl bg-violet-50">
             <span className="px-1 text-xs font-semibold leading-4 text-center text-violet-700">
               {bookmarks.length} bookmarks
@@ -133,7 +242,7 @@ export const BookmarkTable: React.FC<{ parent: Bookmark; bookmarks: Bookmark[] }
               className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
               onClick={openBookmarks}
             >
-              <IconFolderPlus size={16} /> Create Tab Group
+              <FolderPlusIcon className="w-4 h-4" /> Create Tab Group
             </button>
           </div>
           <div className="flex flex-row items-center justify-end">
@@ -141,8 +250,23 @@ export const BookmarkTable: React.FC<{ parent: Bookmark; bookmarks: Bookmark[] }
               className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
               onClick={deleteSelectedBookmarks}
             >
-              <IconTrash size={16} /> Delete Bookmarks
+              <TrashIcon className="w-4 h-4" /> Delete Bookmarks
             </button>
+          </div>
+          <div className="flex flex-row items-center justify-end">
+            <div className="flex flex-row items-center px-2 py-1 text-sm font-semibold bg-indigo-100 border border-solid rounded-lg">
+              <select className="bg-indigo-100 cursor-pointer" onChange={handleSelectionChange}>
+                {groupOptions.map((group, index) => (
+                  <option key={index} value={index}>
+                    {group.type === "bookmarkFolder" ? `${group.value.title}` : `${group.value.title}`}
+                  </option>
+                ))}
+              </select>
+              <div className="w-0 h-4 mx-1.5 border border-slate-400 rounded-t rounded-b" />
+              <button onClick={saveTabsToGroup}>
+                <SquaresPlusIcon className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -186,14 +310,17 @@ export const BookmarkTable: React.FC<{ parent: Bookmark; bookmarks: Bookmark[] }
               {row.getVisibleCells().map((cell) => {
                 if (cell.column.id === "title") {
                   return (
-                    <td className="h-6 border-b border-b-slate-300">
+                    <td key={cell.id} className="h-6 border-b border-b-slate-300">
                       <div className="flex flex-no-wrap pl-1.5 min-w-0 items-center hover:underline cursor-pointer">
                         <Favicon url={cell.getValue<Link>().url} />
                         {/* <span className="inline-block min-w-0 overflow-scroll whitespace-nowrap scrollbar-hide"> */}
-                        <span>
+                        <a href={cell.getValue<Link>().url} target="_blank" rel="noreferrer">
                           {cell.getValue<Link>().title}
-                          {/* {flexRender(cell.column.columnDef.cell, cell.getContext())} */}
-                        </span>
+                        </a>
+                        {/* <span> */}
+                        {/* {cell.getValue<Link>().title} */}
+                        {/* {flexRender(cell.column.columnDef.cell, cell.getContext())} */}
+                        {/* </span> */}
                       </div>
                     </td>
                   );

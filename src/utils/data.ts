@@ -32,14 +32,50 @@ export function relativeTimeFromElapsed(elapsed: number): string {
   return "";
 }
 
+// https://stackoverflow.com/questions/43242440/javascript-regular-expression-for-unicode-emoji
+const emojiRegex =
+  /^((\ud83c[\udde6-\uddff]){2}|([#*0-9]\u20e3)|(\u00a9|\u00ae|[\u2000-\u3300]|[\ud83c-\ud83e][\ud000-\udfff])((\ud83c[\udffb-\udfff])?(\ud83e[\uddb0-\uddb3])?(\ufe0f?\u200d([\u2000-\u3300]|[\ud83c-\ud83e][\ud000-\udfff])\ufe0f?)?)*)/g;
+
 /**
  * Get the first emoji in a string.
  */
 export function extractLeadingEmoji(text?: string): string | undefined {
-  const match = text?.match(/^(\p{Emoji}\uFE0F|\p{Emoji_Presentation})/gu);
+  const match = text?.match(emojiRegex);
   return match ? match[0] : undefined;
 }
 
 export function stripLeadingEmoji(text?: string): string | undefined {
-  return text?.replace(/^(\p{Emoji}\uFE0F|\p{Emoji_Presentation}) */gu, "");
+  return text?.replace(emojiRegex, "");
 }
+
+export function filterUndefined<T>(arr: (T | undefined)[]): T[] {
+  const filtered: T[] = [];
+  for (const e of arr) {
+    if (e !== undefined) {
+      filtered.push(e);
+    }
+  }
+  return filtered;
+}
+
+export async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function stringToUCS2(str: string): string {
+  let ucs2 = "";
+  for (let i = 0; i < str.length; i++) {
+    const charCode = str.charCodeAt(i);
+    if (charCode > 0xffff) {
+      const surrogatePair = charCode.toString(16);
+      const high = parseInt("0x" + surrogatePair.slice(0, -4));
+      const low = parseInt("0x" + surrogatePair.slice(-4));
+      ucs2 += "\\u" + high.toString(16) + "\\u" + low.toString(16);
+    } else {
+      ucs2 += "\\u" + charCode.toString(16);
+    }
+  }
+  return ucs2;
+}
+
+console.log(stringToUCS2("😍"));
