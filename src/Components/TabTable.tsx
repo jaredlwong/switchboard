@@ -1,6 +1,6 @@
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
-import { BookmarkSquareIcon, FaceSmileIcon, SquaresPlusIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { BookmarkSquareIcon, FaceSmileIcon, FolderPlusIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { cx } from "@linaria/core";
 import { IconSortAscending, IconSortDescending, IconTrash, IconVolume, IconVolumeOff } from "@tabler/icons";
 import {
@@ -15,21 +15,20 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { debounce } from "lodash";
-import React, { HTMLProps, useCallback, useEffect, useMemo, useState } from "react";
+import React, { HTMLProps, useCallback, useId, useMemo, useState } from "react";
 import {
-  addTabsToExistingGroup,
+  addTabsToGroup,
   changeTabGroupName,
   closeTab,
   closeTabs,
   focusOnTab,
   muteTab,
-  saveTabsToBookmarkTree,
-  saveTabsToFolder,
+  saveTabsToBookmarkFolder,
   unmuteTab,
 } from "../utils/chrome";
-import { extractLeadingEmoji, stripLeadingEmoji } from "../utils/data";
+import { getHostname, relativeTimeFromEpoch } from "../utils/data";
 import { Favicon } from "./FaviconImage";
-import { GroupOption } from "./shared";
+import { GroupName, TabInfo } from "./shared";
 
 const IndeterminateCheckbox: React.FC<
   {
@@ -48,7 +47,7 @@ const IndeterminateCheckbox: React.FC<
   return <input type="checkbox" ref={ref} className={cx(className, "cursor-pointer")} {...props} />;
 };
 
-const MuteButton: React.FC<{ tab: chrome.tabs.Tab }> = ({ tab }) => {
+const MuteButton: React.FC<{ tab: TabInfo }> = ({ tab }) => {
   let inner = <></>;
   if (tab.mutedInfo?.muted) {
     inner = (
@@ -74,27 +73,33 @@ const MuteButton: React.FC<{ tab: chrome.tabs.Tab }> = ({ tab }) => {
 
 interface Props {
   tabGroup?: chrome.tabGroups.TabGroup;
-  tabs: chrome.tabs.Tab[];
-  groupOptions: GroupOption[];
+  tabs: TabInfo[];
+  groupNames: GroupName[];
 }
 
-export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
+export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames }) => {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [selectedGroup, setSelectedGroup] = useState<GroupOption | undefined>(undefined);
+  const [selectedGroup, setSelectedGroup] = useState<string | undefined>(undefined);
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
-  const [groupEmoji, setGroupEmoji] = useState<string | undefined>(undefined);
-  const [groupTextName, setGroupTextName] = useState<string | undefined>(undefined);
+
+  // const [groupName, setGroupName] = useState<GroupName>(GroupName.fromString(tabGroup?.title ?? ""));
+  // // update group name
+  // useEffect(() => {
+  //   if (tabGroup) {
+  //     changeTabGroupName(tabGroup, groupName.toString());
+  //   }
+  // }, [groupName]);
 
   type Link = { url: string; title: string };
 
-  type CB<T> = ColumnDef<chrome.tabs.Tab, T>;
+  type CB<T> = ColumnDef<TabInfo, T>;
 
-  const closeTabInternal = async (tab: chrome.tabs.Tab) => {
+  const closeTabInternal = async (tab: TabInfo) => {
     await closeTab(tab);
   };
 
-  const columns = useMemo<(CB<number> | CB<Date> | CB<Link>)[]>(
+  const columns = useMemo<(CB<number> | CB<Date> | CB<Link> | CB<string>)[]>(
     () => [
       {
         id: "select",
@@ -117,16 +122,30 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
         id: "title",
         accessorFn: (row) => ({ url: row.url ?? "", title: row.title ?? "" } satisfies Link),
         header: "Title",
-        cell: (props) => (
-          <a href={props.getValue().url} target="_blank" rel="noreferrer">
-            {props.getValue().title}
-          </a>
-        ),
         enableSorting: true,
-        sortingFn: (rowA: Row<chrome.tabs.Tab>, rowB: Row<chrome.tabs.Tab>, columnId: string) => {
+        sortingFn: (rowA: Row<TabInfo>, rowB: Row<TabInfo>, columnId: string) => {
           return rowA.getValue<Link>(columnId).url < rowB.getValue<Link>(columnId).url ? 1 : -1;
         },
       } satisfies CB<Link>,
+      {
+        id: "hostname",
+        accessorFn: (row) => row.url ?? "",
+        header: "",
+        enableSorting: true,
+        sortingFn: "alphanumeric",
+        // cell: (props) => {
+        //   return <></>;
+        // const tabId = props.getValue<number>();
+        // if (tabId === -1) {
+        //   return "";
+        // }
+        // return "";
+        // const key = `tab=${tabId}`;
+        // const data = await chrome.storage.session.get(key);
+        // const tabStorage = TabStorage.fromDict(data[key] ?? {});
+        // return relativeTimeFromElapsed(tabStorage.lastActive);
+        // },
+      } satisfies CB<string>,
       {
         id: "mute_tab",
         header: () => <></>,
@@ -143,19 +162,18 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
           </div>
         ),
       } satisfies CB<number>,
-      // {
-      //   id: "last_opened",
-      //   accessorFn: (row) => (row.dateAdded ? new Date(row.dateAdded) : new Date()),
-      //   header: "Last Opened",
-      //   enableSorting: true,
-      //   sortingFn: "datetime",
-      //   cell: (props) => relativeTimeFromDates(props.getValue()),
-      // } satisfies CB<Date>,
+      {
+        id: "last_active",
+        accessorFn: (row) => row.lastActive ?? -1,
+        header: "Last Active",
+        enableSorting: true,
+        sortingFn: "basic",
+      } satisfies CB<number>,
     ],
     [],
   );
 
-  const table = useReactTable<chrome.tabs.Tab>({
+  const table = useReactTable<TabInfo>({
     data: tabs,
     columns,
     state: {
@@ -173,76 +191,74 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
   });
 
   const closeSelectedTabs = async () => {
-    const tabs = table.getSelectedRowModel().flatRows.map((row) => row.original);
+    const selectedTabs = table.getSelectedRowModel().flatRows.map((row) => row.original);
     setRowSelection({});
-    await closeTabs(tabs);
+    if (selectedTabs) {
+      await closeTabs(selectedTabs);
+    }
   };
 
-  const bookmarkGroupInternal = async () => {
-    await saveTabsToFolder(tabGroup?.title ?? "Ungrouped", tabs);
-    await closeTabs(tabs);
-  };
-
-  const handleSelectionChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedGroup(groupOptions[Number(event.target.value)]);
-  };
-
-  const saveTabsToGroup = async () => {
-    if (selectedGroup === undefined) {
+  const moveTabsToGroupInternal = useCallback(async () => {
+    const selectedTabs = table.getSelectedRowModel().flatRows.map((row) => row.original);
+    if (selectedGroup === undefined || selectedTabs.length == 0) {
       return;
     }
-    const tabs = table.getSelectedRowModel().flatRows.map((row) => row.original);
-    if (selectedGroup.type === "bookmarkFolder") {
-      setRowSelection({});
-      await saveTabsToBookmarkTree(selectedGroup.value, tabs);
-      await closeTabs(tabs);
-    } else if (selectedGroup.type === "tabGroup") {
-      await addTabsToExistingGroup(selectedGroup.value, tabs);
+    setRowSelection({});
+    await addTabsToGroup(selectedGroup.toString(), selectedTabs);
+  }, [selectedGroup]);
+
+  const moveTabsToFolderInternal = useCallback(async () => {
+    const selectedTabs = table.getSelectedRowModel().flatRows.map((row) => row.original);
+    if (selectedGroup === undefined || selectedTabs.length == 0) {
+      return;
     }
+    setRowSelection({});
+    await saveTabsToBookmarkFolder(selectedGroup.toString(), selectedTabs);
+    await closeTabs(selectedTabs);
+  }, [selectedGroup]);
+
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedGroup(event.target.value);
   };
 
-  useEffect(() => {
-    // this is the top-left selection
-    setSelectedGroup(groupOptions[0]);
-  }, []);
-
-  useEffect(() => {
-    // this is the group name
-    const emoji = extractLeadingEmoji(tabGroup?.title);
-    if (emoji !== groupEmoji) {
-      setGroupEmoji(emoji ? emoji : undefined);
+  const changeTabGroupNameInternal = async (
+    id?: number,
+    options?: {
+      oldName?: string;
+      newEmoji?: string;
+      newText?: string;
+    },
+  ) => {
+    if (id !== undefined && id !== -1 && options !== undefined) {
+      const groupName = GroupName.merge(options);
+      return changeTabGroupName(id, groupName.toString());
     }
-    const textName = stripLeadingEmoji(tabGroup?.title);
-    if (textName !== groupTextName) {
-      setGroupTextName(textName);
-    }
-  }, [tabGroup]);
-
-  // update group name
-  useEffect(() => {
-    const groupName = groupEmoji ? `${groupEmoji} ${groupTextName}` : groupTextName ?? "";
-    if (tabGroup) {
-      changeTabGroupName(tabGroup, groupName);
-    }
-  }, [groupEmoji, groupTextName]);
+  };
 
   const handleGroupTextNameChange = useCallback(
     debounce((e: React.FormEvent<HTMLSpanElement>) => {
-      const newName = (e.target as HTMLElement).innerText;
-      setGroupTextName(newName);
+      const newText = (e.target as HTMLElement).innerText;
+      changeTabGroupNameInternal(tabGroup?.id, { oldName: tabGroup?.title, newText });
     }, 500),
-    [],
+    [tabGroup],
   );
 
-  const handleEmojiPickerClicked = () => {
+  const handleEmojiPickerClicked = useCallback(() => {
     setShowEmojiPicker(!showEmojiPicker);
-  };
+  }, [showEmojiPicker]);
 
-  const handleEmojiSelected = (emoji: any) => {
-    // todo handle ungrouped
-    setGroupEmoji(emoji.native);
-    setShowEmojiPicker(false);
-  };
+  const handleEmojiSelected = useCallback(
+    (emoji: any) => {
+      // todo handle ungrouped
+      changeTabGroupNameInternal(tabGroup?.id, { oldName: tabGroup?.title, newEmoji: emoji.native });
+      setShowEmojiPicker(false);
+    },
+    [tabGroup],
+  );
+
+  const groupOptionsId = useId();
+
+  const groupName = GroupName.fromString(tabGroup?.title ?? "");
 
   return (
     <div className="p-2 min-w-[200px] w-screen lg:max-w-6xl flex flex-col rounded-xl border border-solid border-slate-200 bg-white items-start gap-2.5 shadow-md">
@@ -253,7 +269,7 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
         <div className="flex flex-row items-center gap-x-2 grow">
           <div className="flex items-center gap-0 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200">
             <button className="font-sans text-sm font-semibold text-slate-800" onClick={handleEmojiPickerClicked}>
-              {groupEmoji ?? <FaceSmileIcon className="w-4 h-4" />}
+              {groupName.emoji || <FaceSmileIcon className="w-4 h-4" />}
             </button>
             {showEmojiPicker && (
               <div className="relative">
@@ -269,7 +285,7 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
               onInput={handleGroupTextNameChange}
               suppressContentEditableWarning={true}
             >
-              {groupTextName ?? "Ungrouped"}
+              {groupName.text || "Ungrouped"}
             </span>
           </div>
           <div className="flex items-center p-1 rounded-2xl bg-violet-50">
@@ -280,15 +296,6 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
           <div className="flex flex-row items-center justify-end">
             <button
               className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
-              onClick={bookmarkGroupInternal}
-            >
-              <BookmarkSquareIcon className="w-4 h-4" />
-              Bookmark Group
-            </button>
-          </div>
-          <div className="flex flex-row items-center justify-end">
-            <button
-              className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
               onClick={closeSelectedTabs}
             >
               <TrashIcon className="w-4 h-4" /> Close Tabs
@@ -296,16 +303,25 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
           </div>
           <div className="flex flex-row items-center justify-end">
             <div className="flex flex-row items-center px-2 py-1 text-sm font-semibold bg-indigo-100 border border-solid rounded-lg">
-              <select className="bg-indigo-100 cursor-pointer" onChange={handleSelectionChange}>
-                {groupOptions.map((group, index) => (
-                  <option key={index} value={index}>
-                    {group.type === "bookmarkFolder" ? `${group.value.title}` : `${group.value.title}`}
-                  </option>
-                ))}
-              </select>
+              <input
+                type="text"
+                className="bg-indigo-100 w-36"
+                placeholder="move"
+                list={groupOptionsId}
+                onChange={handleInputChange}
+              />
+              <datalist className="bg-indigo-100 cursor-pointer" id={groupOptionsId}>
+                {groupNames.map((group, index) => {
+                  return <option key={index} value={group.toString()} />;
+                })}
+              </datalist>
               <div className="w-0 h-4 mx-1.5 border border-slate-400 rounded-t rounded-b" />
-              <button onClick={saveTabsToGroup}>
-                <SquaresPlusIcon className="w-4 h-4" />
+              <button onClick={moveTabsToGroupInternal}>
+                <FolderPlusIcon className="w-4 h-4" />
+              </button>
+              <div className="w-0 h-4 mx-1.5 border border-slate-400 rounded-t rounded-b" />
+              <button onClick={moveTabsToFolderInternal}>
+                <BookmarkSquareIcon className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -349,7 +365,15 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
           {table.getRowModel().rows.map((row) => (
             <tr key={row.id}>
               {row.getVisibleCells().map((cell) => {
-                if (cell.column.id === "title") {
+                if (cell.column.id === "select") {
+                  return (
+                    <td key={cell.id} className="h-6 border-b border-b-slate-300 text-nowrap whitespace-nowrap">
+                      <div className="flex items-center justify-center">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </div>
+                    </td>
+                  );
+                } else if (cell.column.id === "title") {
                   return (
                     <td key={cell.id} className="h-6 border-b border-b-slate-300">
                       <div className="flex flex-no-wrap pl-1.5 min-w-0 items-center hover:underline cursor-pointer">
@@ -365,6 +389,14 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
                       </div>
                     </td>
                   );
+                } else if (cell.column.id === "hostname") {
+                  const url = cell.getValue<string>();
+                  const hostname = getHostname(url) ?? url;
+                  return (
+                    <td key={cell.id} className="h-6 border-b border-b-slate-300 text-nowrap whitespace-nowrap">
+                      <div className="flex items-center justify-start">{hostname}</div>
+                    </td>
+                  );
                 } else if (cell.column.id === "date_added") {
                   return (
                     <td key={cell.id} className="h-6 border-b border-b-slate-300 text-nowrap whitespace-nowrap">
@@ -373,11 +405,20 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupOptions }) => {
                       </div>
                     </td>
                   );
-                } else {
+                } else if (cell.column.id === "mute_tab" || cell.column.id === "close_tab") {
                   return (
                     <td key={cell.id} className="h-6 border-b border-b-slate-300 text-nowrap whitespace-nowrap">
-                      <div className={cx("flex items-center justify-center", cell.column.id !== "select" ? "w-6" : "")}>
+                      <div className="flex items-center justify-center w-6">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </div>
+                    </td>
+                  );
+                } else if (cell.column.id === "last_active") {
+                  const lastActive = cell.getValue<number>();
+                  return (
+                    <td key={cell.id} className="h-6 border-b border-b-slate-300 text-nowrap whitespace-nowrap">
+                      <div className="flex items-center justify-end">
+                        <span>{lastActive !== -1 ? relativeTimeFromEpoch(lastActive) : ""}</span>
                       </div>
                     </td>
                   );

@@ -1,3 +1,12 @@
+export function getHostname(url: string): string | undefined {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname;
+  } catch (e: unknown) {
+    return undefined;
+  }
+}
+
 const units: { unit: Intl.RelativeTimeFormatUnit; ms: number }[] = [
   { unit: "year", ms: 31536000000 },
   { unit: "month", ms: 2628000000 },
@@ -17,6 +26,10 @@ export function relativeTimeFromDates(relative: Date | null, pivot: Date = new D
   if (!relative) return "";
   const elapsed = relative.getTime() - pivot.getTime();
   return relativeTimeFromElapsed(elapsed);
+}
+
+export function relativeTimeFromEpoch(date: number): string {
+  return relativeTimeFromDates(new Date(date));
 }
 
 /**
@@ -45,7 +58,7 @@ export function extractLeadingEmoji(text?: string): string | undefined {
 }
 
 export function stripLeadingEmoji(text?: string): string | undefined {
-  return text?.replace(emojiRegex, "");
+  return text?.replace(emojiRegex, "").trim();
 }
 
 export function filterUndefined<T>(arr: (T | undefined)[]): T[] {

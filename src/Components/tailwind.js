@@ -246,6 +246,30 @@ const space_between = [
   ["space-px", "1"],
 ];
 
+const text_size = [
+  ["text-xs", "12"],
+  ["text-sm", "14"],
+  ["text-base", "16"],
+  ["text-lg", "18"],
+  ["text-xl", "20"],
+  ["text-2xl", "24"],
+  ["text-3xl", "30"],
+  ["text-4xl", "36"],
+  ["text-5xl", "48"],
+  ["text-6xl", "60"],
+  ["text-7xl", "72"],
+  ["text-8xl", "96"],
+  ["text-9xl", "128"],
+];
+
+// for (const [name, value] of [...width, ...max_width, ...height, ...max_height, ...padding, ...margin, ...space_between, ...text_size]) {
+//   const variableID = VariablesBindings.createVariable(
+//     name,
+//     props.variableSet.node_id!,
+//     getDefaultVariableValueForResolvedType(VariableResolvedDataType.FLOAT, value)
+//   )
+// }
+
 const colors = {
   Slate: [
     ["50", "#f8fafc"],
@@ -512,19 +536,3 @@ const colors = {
     ["900", "#881337"],
   ],
 };
-
-const text_size = [
-  ["text-xs", "12"],
-  ["text-sm", "14"],
-  ["text-base", "16"],
-  ["text-lg", "18"],
-  ["text-xl", "20"],
-  ["text-2xl", "24"],
-  ["text-3xl", "30"],
-  ["text-4xl", "36"],
-  ["text-5xl", "48"],
-  ["text-6xl", "60"],
-  ["text-7xl", "72"],
-  ["text-8xl", "96"],
-  ["text-9xl", "128"],
-];

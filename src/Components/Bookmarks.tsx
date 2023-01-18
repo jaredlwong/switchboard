@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useReducer, useState } from "react";
 import { BookmarkTable } from "./BookmarkTable";
-import { GroupOption } from "./shared";
+import { GroupName, TabInfo, TabStorage } from "./shared";
 import { TabTable } from "./TabTable";
 
 type BookmarkGroup = {
@@ -12,7 +12,7 @@ type BookmarkGroup = {
 };
 
 type TabGroup = {
-  tabs: chrome.tabs.Tab[];
+  tabs: TabInfo[];
   tabGroup?: chrome.tabGroups.TabGroup;
   groupId: number;
 };
@@ -55,7 +55,7 @@ function sortMapByKey<K, V>(map: Map<K, V>) {
   return new Map<K, V>(sortedArray);
 }
 
-function groupTabs(tabGroups: chrome.tabGroups.TabGroup[], tabs: chrome.tabs.Tab[]): Map<number, TabGroup> {
+function groupTabs(tabGroups: chrome.tabGroups.TabGroup[], tabs: TabInfo[]): Map<number, TabGroup> {
   const groups = new Map<number, TabGroup>();
   for (const tab of tabs) {
     const groupId = tab.groupId ?? -1;
@@ -72,24 +72,94 @@ function groupTabs(tabGroups: chrome.tabGroups.TabGroup[], tabs: chrome.tabs.Tab
   return sortMapByKey(groups);
 }
 
+function getGroupNames(
+  tabGroups: chrome.tabGroups.TabGroup[],
+  bookmarkFolders: chrome.bookmarks.BookmarkTreeNode[],
+): GroupName[] {
+  const groupNames: GroupName[] = [];
+  for (const group of tabGroups) {
+    groupNames.push(GroupName.fromString(group.title ?? ""));
+  }
+  for (const folder of bookmarkFolders) {
+    groupNames.push(GroupName.fromString(folder.title));
+  }
+  return groupNames;
+}
+
+interface ActiveTabData {
+  activeTab: number;
+}
+
 export const Bookmarks: React.FC = () => {
-  const [tabs, setTabs] = useState<chrome.tabs.Tab[]>([]);
+  const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [tabGroupsRaw, setTabGroupsRaw] = useState<chrome.tabGroups.TabGroup[]>([]);
   const [bookmarkTree, setBookmarkTree] = useState<chrome.bookmarks.BookmarkTreeNode[]>([]);
 
-  const [tabGroups, setTabGroups] = useState<Map<number, TabGroup>>(new Map());
-  const [bookmarkGroups, setBookmarkGroups] = useState<Map<string, BookmarkGroup>>(new Map());
-  const [groupOptions, setGroupOptions] = useState<GroupOption[]>([]);
+  // const [tabGroups, setTabGroups] = useState<Map<number, TabGroup>>(new Map());
+  // const [bookmarkGroups, setBookmarkGroups] = useState<Map<string, BookmarkGroup>>(new Map());
+  // const [groupNames, setGroupNames] = useState<GroupName[]>([]);
 
-  const updateTabs = () => chrome.tabs.query({}, setTabs);
-  const updateTabGroups = () => chrome.tabGroups.query({}, setTabGroupsRaw);
-  const updateBookmarks = () => chrome.bookmarks.getTree(setBookmarkTree);
+  function reducer(oldActiveTabId: number, action: { newActiveTabId: number; url: string }): number {
+    if (oldActiveTabId !== action.newActiveTabId) {
+      if (oldActiveTabId !== -1) {
+        console.log(
+          "updating local storage",
+          JSON.stringify({
+            tabId: oldActiveTabId,
+            lastActive: new Date().getTime(),
+          }),
+        );
+        // async
+        TabStorage.update(chrome.storage.session, {
+          tabId: oldActiveTabId,
+          lastActive: new Date().getTime(),
+        });
+      }
+      console.log(`new active tab '${action.newActiveTabId}' '${action.url}'`);
+      return action.newActiveTabId;
+    }
+    return oldActiveTabId;
+  }
 
-  const refreshCallback = () => {
-    updateTabs();
-    updateTabGroups();
-    updateBookmarks();
+  // stores last active tab id
+  const [activeTabs, setActiveTabs] = useReducer(reducer, -1);
+
+  const updateTabs = async () => {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.active) {
+        setActiveTabs({ newActiveTabId: tab.id ?? -1, url: tab.url ?? "" });
+      }
+    }
+    const tabStorages: Map<number, TabStorage> = new Map();
+    for (const tab of tabs) {
+      const tabId = tab.id;
+      if (tabId !== undefined && tabId >= 0) {
+        tabStorages.set(tabId, await TabStorage.fromStorage(chrome.storage.session, tabId));
+      }
+    }
+    const tabInfo: TabInfo[] = [];
+    for (const tab of tabs) {
+      tabInfo.push({
+        title: tab.title,
+        url: tab.url,
+        windowId: tab.windowId,
+        active: tab.active,
+        id: tab.id,
+        audible: tab.audible,
+        mutedInfo: tab.mutedInfo,
+        groupId: tab.groupId,
+        lastActive: tabStorages.get(tab.id ?? -1)?.lastActive,
+      });
+    }
+    setTabs(tabInfo);
   };
+
+  // const updateTabs = debounce(updateTabsRaw, 500);
+  const updateTabGroups = () => chrome.tabGroups.query({}, setTabGroupsRaw);
+  // const updateTabGroups = debounce(updateTabGroupsRaw, 500);
+  const updateBookmarks = () => chrome.bookmarks.getTree(setBookmarkTree);
+  // const updateBookmarks = debounce(updateBookmarksRaw, 500);
 
   useEffect(() => {
     updateTabs();
@@ -149,45 +219,23 @@ export const Bookmarks: React.FC = () => {
     };
   }, []);
 
-  useEffect(() => {
-    setTabGroups(groupTabs(tabGroupsRaw, tabs));
-  }, [tabs, tabGroupsRaw]);
-
-  useEffect(() => {
-    setBookmarkGroups(walkBookmarkTree(bookmarkTree));
-  }, [bookmarkTree]);
-
-  useEffect(() => {
-    const opts: GroupOption[] = [];
-    for (const [_, group] of tabGroups) {
-      if (group.tabGroup !== undefined) {
-        opts.push({ type: "tabGroup", value: group.tabGroup });
-      }
-    }
-    for (const [_, group] of bookmarkGroups) {
-      if (group.parent !== undefined) {
-        opts.push({ type: "bookmarkFolder", value: group.parent });
-      }
-    }
-    setGroupOptions(opts);
-  }, [tabGroups, bookmarkGroups]);
+  const tabGroups = groupTabs(tabGroupsRaw, tabs);
+  const bookmarkGroups = walkBookmarkTree(bookmarkTree);
+  const groupNames = getGroupNames(
+    tabGroupsRaw,
+    [...bookmarkGroups.values()].map((g) => g.parent),
+  );
 
   return (
     <div className="grid grid-cols-1 p-4 bg-gray-200 place-items-center gap-y-4 bg-topography">
       <div className="flex flex-col gap-y-4">
         {[...tabGroups.entries()].map(([groupId, group]) => {
-          return <TabTable key={groupId} tabGroup={group.tabGroup} tabs={group.tabs} groupOptions={groupOptions} />;
+          return <TabTable key={groupId} tabGroup={group.tabGroup} tabs={group.tabs} groupNames={groupNames} />;
         })}
       </div>
       <div className="flex flex-col gap-y-4">
         {[...bookmarkGroups.entries()].map(([groupId, group]) => (
-          <BookmarkTable
-            key={groupId}
-            parent={group.parent}
-            bookmarks={group.bookmarks}
-            groupOptions={groupOptions}
-            refreshCallback={refreshCallback}
-          />
+          <BookmarkTable key={groupId} parent={group.parent} bookmarks={group.bookmarks} groupNames={groupNames} />
         ))}
       </div>
     </div>
