@@ -15,7 +15,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { debounce } from "lodash";
-import React, { HTMLProps, useCallback, useEffect, useId, useMemo, useState } from "react";
+import React, { HTMLProps, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   changeBookmarkFolderName,
   createTabGroup,
@@ -57,7 +57,7 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames }
   const [sorting, setSorting] = useState<SortingState>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
   const [groupName, setGroupName] = useState<GroupName>(GroupName.fromString(parent.title));
-  const [selectedGroupName, setSelectedGroupName] = useState<GroupName | undefined>(undefined);
+  const selectedGroupName = useRef<GroupName | undefined>(undefined);
 
   useEffect(() => {
     changeBookmarkFolderName(parent, groupName.toString());
@@ -132,8 +132,8 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames }
   const openBookmarks = useCallback(async () => {
     const selectedBookmarks = table.getSelectedRowModel().flatRows.map((row) => row.original);
     setRowSelection({});
-    if (selectedBookmarks && selectedGroupName !== undefined) {
-      await createTabGroup(selectedGroupName.toString(), filterUndefined(selectedBookmarks.map((b) => b.url)));
+    if (selectedBookmarks && selectedGroupName.current !== undefined) {
+      await createTabGroup(selectedGroupName.current.toString(), filterUndefined(selectedBookmarks.map((b) => b.url)));
     }
   }, [groupName]);
 
@@ -146,25 +146,24 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames }
   };
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("handle input change", event.target.value);
-    setSelectedGroupName(GroupName.fromString(event.target.value));
+    selectedGroupName.current = GroupName.fromString(event.target.value);
   };
 
-  const moveBookmarksToTabGroupInternal = useCallback(async () => {
+  const moveBookmarksToTabGroupInternal = async () => {
     const bookmarks = table.getSelectedRowModel().flatRows.map((row) => row.original);
-    if (selectedGroupName === undefined || bookmarks.length === 0) {
+    if (selectedGroupName.current === undefined || bookmarks.length === 0) {
       return;
     }
-    await moveBookmarksToTabGroup(selectedGroupName.toString(), bookmarks);
-  }, [selectedGroupName]);
+    await moveBookmarksToTabGroup(selectedGroupName.current.toString(), bookmarks);
+  };
 
-  const moveBookmarksToFolderInternal = useCallback(async () => {
+  const moveBookmarksToFolderInternal = async () => {
     const bookmarks = table.getSelectedRowModel().flatRows.map((row) => row.original);
-    if (selectedGroupName === undefined || bookmarks.length === 0) {
+    if (selectedGroupName.current === undefined || bookmarks.length === 0) {
       return;
     }
-    await moveBookmarksToFolder(selectedGroupName.toString(), bookmarks);
-  }, [selectedGroupName]);
+    await moveBookmarksToFolder(selectedGroupName.current.toString(), bookmarks);
+  };
 
   const handleGroupTextNameChange = useCallback(
     debounce((e: React.FormEvent<HTMLSpanElement>) => {
@@ -222,14 +221,6 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames }
           </div>
         </div>
         <div className="flex flex-row gap-x-3">
-          <div className="flex flex-row items-center justify-end">
-            <button
-              className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
-              onClick={openBookmarks}
-            >
-              <FolderPlusIcon className="w-4 h-4" /> Create Tab Group
-            </button>
-          </div>
           <div className="flex flex-row items-center justify-end">
             <button
               className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"

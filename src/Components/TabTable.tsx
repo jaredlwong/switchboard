@@ -14,7 +14,7 @@ import {
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { debounce } from "lodash";
+import { debounce, truncate } from "lodash";
 import React, { HTMLProps, useCallback, useId, useMemo, useState } from "react";
 import {
   addTabsToGroup,
@@ -383,7 +383,7 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames }) => {
                           {/* {cell.getValue<Link>().title} */}
                           {/* {flexRender(cell.column.columnDef.cell, cell.getContext())} */}
                           {/* <a href={cell.getValue<Link>().url} target="_blank" rel="noreferrer"> */}
-                          {cell.getValue<Link>().title}
+                          {truncate(cell.getValue<Link>().title, { length: 150 })}
                           {/* </a> */}
                         </span>
                       </div>

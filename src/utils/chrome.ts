@@ -47,7 +47,7 @@ async function getBookmarkFolder(path: string[]): Promise<chrome.bookmarks.Bookm
   return await bookmarkFolderHelper(0, root[0]);
 }
 
-async function getExtensionBookmarkFolder(): Promise<chrome.bookmarks.BookmarkTreeNode> {
+export async function getExtensionBookmarkFolder(): Promise<chrome.bookmarks.BookmarkTreeNode> {
   const folder = await getBookmarkFolder(["Other Bookmarks"]);
   if (folder === undefined) {
     throw new Error("Could not find Other Bookmarks folder");

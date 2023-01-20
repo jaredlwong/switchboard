@@ -90,5 +90,3 @@ function stringToUCS2(str: string): string {
   }
   return ucs2;
 }
-
-console.log(stringToUCS2("😍"));
