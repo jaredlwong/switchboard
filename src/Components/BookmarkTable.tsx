@@ -18,12 +18,11 @@ import { debounce } from "lodash";
 import React, { HTMLProps, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   changeBookmarkFolderName,
-  createTabGroup,
   deleteBookmarks,
   moveBookmarksToFolder,
   moveBookmarksToTabGroup,
 } from "../utils/chrome";
-import { filterUndefined, relativeTimeFromDates } from "../utils/data";
+import { getHostname, relativeTimeFromDates } from "../utils/data";
 import { Favicon } from "./FaviconImage";
 import { GroupName } from "./shared";
 
@@ -50,9 +49,10 @@ interface Props {
   parent: Bookmark;
   bookmarks: Bookmark[];
   groupNames: GroupName[];
+  refresh: () => Promise<void>;
 }
 
-export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames }) => {
+export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames, refresh }) => {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [sorting, setSorting] = useState<SortingState>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
@@ -101,6 +101,13 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames }
         },
       } satisfies CB<Link>,
       {
+        id: "hostname",
+        accessorFn: (row) => row.url ?? "",
+        header: "",
+        enableSorting: true,
+        sortingFn: "alphanumeric",
+      } satisfies CB<string>,
+      {
         id: "date_added",
         accessorFn: (row) => (row.dateAdded ? new Date(row.dateAdded) : new Date()),
         header: "Date Added",
@@ -129,13 +136,13 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames }
     // debugColumns: true,
   });
 
-  const openBookmarks = useCallback(async () => {
-    const selectedBookmarks = table.getSelectedRowModel().flatRows.map((row) => row.original);
-    setRowSelection({});
-    if (selectedBookmarks && selectedGroupName.current !== undefined) {
-      await createTabGroup(selectedGroupName.current.toString(), filterUndefined(selectedBookmarks.map((b) => b.url)));
-    }
-  }, [groupName]);
+  const deleteSelfIfEmpty = async () => {
+    const folders = await chrome.bookmarks.get(parent.id);
+    const emptyFolders = folders.filter((folder) => {
+      return folder.children === undefined || folder.children?.length === 0;
+    });
+    await deleteBookmarks(emptyFolders);
+  };
 
   const deleteSelectedBookmarks = async () => {
     const selectedBookmarks = table.getSelectedRowModel().flatRows.map((row) => row.original);
@@ -143,26 +150,34 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames }
     if (selectedBookmarks) {
       await deleteBookmarks(selectedBookmarks);
     }
+    await deleteSelfIfEmpty();
+    await refresh();
   };
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     selectedGroupName.current = GroupName.fromString(event.target.value);
   };
 
-  const moveBookmarksToTabGroupInternal = async () => {
+  const moveBookmarksToTabGroupInternal = useCallback(async () => {
     const bookmarks = table.getSelectedRowModel().flatRows.map((row) => row.original);
-    if (selectedGroupName.current === undefined || bookmarks.length === 0) {
+    setRowSelection({});
+    if (bookmarks.length === 0) {
       return;
     }
-    await moveBookmarksToTabGroup(selectedGroupName.current.toString(), bookmarks);
-  };
+    const tabGroupName = selectedGroupName.current?.toString() ?? groupName.toString();
+    await moveBookmarksToTabGroup(tabGroupName, bookmarks);
+    await refresh();
+  }, [groupName]);
 
   const moveBookmarksToFolderInternal = async () => {
     const bookmarks = table.getSelectedRowModel().flatRows.map((row) => row.original);
+    setRowSelection({});
     if (selectedGroupName.current === undefined || bookmarks.length === 0) {
       return;
     }
     await moveBookmarksToFolder(selectedGroupName.current.toString(), bookmarks);
+    await deleteSelfIfEmpty();
+    await refresh();
   };
 
   const handleGroupTextNameChange = useCallback(
@@ -307,6 +322,14 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames }
                         {/* {flexRender(cell.column.columnDef.cell, cell.getContext())} */}
                         {/* </span> */}
                       </div>
+                    </td>
+                  );
+                } else if (cell.column.id === "hostname") {
+                  const url = cell.getValue<string>();
+                  const hostname = getHostname(url) ?? url;
+                  return (
+                    <td key={cell.id} className="h-6 border-b border-b-slate-300 text-nowrap whitespace-nowrap">
+                      <div className="flex items-center justify-start">{hostname}</div>
                     </td>
                   );
                 } else if (cell.column.id === "date_added") {

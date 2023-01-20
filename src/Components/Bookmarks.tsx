@@ -1,6 +1,7 @@
 import lodash from "lodash";
-import React, { memo, useEffect, useReducer, useRef } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { getExtensionBookmarkFolder } from "../utils/chrome";
+import { sleep } from "../utils/data";
 import { BookmarkTable } from "./BookmarkTable";
 import { GroupName, TabInfo, TabStorage } from "./shared";
 import { TabTable } from "./TabTable";
@@ -225,6 +226,13 @@ export const Bookmarks: React.FC = () => {
     setGroupNames(getGroupNames(tabGroupsRaw.current, bookmarkFolders.current));
   };
 
+  const refresh = useCallback(async () => {
+    await sleep(500);
+    await updateTabs();
+    await updateTabGroups();
+    await updateBookmarks();
+  }, []);
+
   const [tabGroups, setTabGroups] = useReducer(
     (oldTabGroups: Map<number, TabGroup>, newTabGroups: Map<number, TabGroup>) => {
       for (const [key, value] of newTabGroups) {
@@ -280,12 +288,26 @@ export const Bookmarks: React.FC = () => {
     <div className="grid grid-cols-1 p-4 bg-gray-200 place-items-center gap-y-4 bg-topography">
       <div className="flex flex-col gap-y-4">
         {[...tabGroups.entries()].map(([groupId, group]) => {
-          return <MemoTabTable key={groupId} tabGroup={group.tabGroup} tabs={group.tabs} groupNames={groupNames} />;
+          return (
+            <MemoTabTable
+              key={groupId}
+              tabGroup={group.tabGroup}
+              tabs={group.tabs}
+              groupNames={groupNames}
+              refresh={refresh}
+            />
+          );
         })}
       </div>
       <div className="flex flex-col gap-y-4">
         {[...bookmarkGroups.entries()].map(([groupId, group]) => (
-          <MemoBookmarkTable key={groupId} parent={group.parent} bookmarks={group.bookmarks} groupNames={groupNames} />
+          <MemoBookmarkTable
+            key={groupId}
+            parent={group.parent}
+            bookmarks={group.bookmarks}
+            groupNames={groupNames}
+            refresh={refresh}
+          />
         ))}
       </div>
     </div>

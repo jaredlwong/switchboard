@@ -71,6 +71,16 @@ export function filterUndefined<T>(arr: (T | undefined)[]): T[] {
   return filtered;
 }
 
+export function filterSettled<T>(results: PromiseSettledResult<T | undefined>[]): T[] {
+  const filtered: T[] = [];
+  for (const result of results) {
+    if (result.status === "fulfilled" && result.value !== undefined) {
+      filtered.push(result.value);
+    }
+  }
+  return filtered;
+}
+
 export async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

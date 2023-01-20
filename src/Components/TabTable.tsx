@@ -26,7 +26,7 @@ import {
   saveTabsToBookmarkFolder,
   unmuteTab,
 } from "../utils/chrome";
-import { getHostname, relativeTimeFromEpoch } from "../utils/data";
+import { getHostname, relativeTimeFromEpoch, sleep } from "../utils/data";
 import { Favicon } from "./FaviconImage";
 import { GroupName, TabInfo } from "./shared";
 
@@ -75,9 +75,10 @@ interface Props {
   tabGroup?: chrome.tabGroups.TabGroup;
   tabs: TabInfo[];
   groupNames: GroupName[];
+  refresh: () => Promise<void>;
 }
 
-export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames }) => {
+export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames, refresh }) => {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [sorting, setSorting] = useState<SortingState>([]);
   const [selectedGroup, setSelectedGroup] = useState<string | undefined>(undefined);
@@ -133,18 +134,6 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames }) => {
         header: "",
         enableSorting: true,
         sortingFn: "alphanumeric",
-        // cell: (props) => {
-        //   return <></>;
-        // const tabId = props.getValue<number>();
-        // if (tabId === -1) {
-        //   return "";
-        // }
-        // return "";
-        // const key = `tab=${tabId}`;
-        // const data = await chrome.storage.session.get(key);
-        // const tabStorage = TabStorage.fromDict(data[key] ?? {});
-        // return relativeTimeFromElapsed(tabStorage.lastActive);
-        // },
       } satisfies CB<string>,
       {
         id: "mute_tab",
@@ -196,6 +185,7 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames }) => {
     if (selectedTabs) {
       await closeTabs(selectedTabs);
     }
+    await refresh();
   };
 
   const moveTabsToGroupInternal = useCallback(async () => {
@@ -205,6 +195,7 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames }) => {
     }
     setRowSelection({});
     await addTabsToGroup(selectedGroup.toString(), selectedTabs);
+    await refresh();
   }, [selectedGroup]);
 
   const moveTabsToFolderInternal = useCallback(async () => {
@@ -215,6 +206,7 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames }) => {
     setRowSelection({});
     await saveTabsToBookmarkFolder(selectedGroup.toString(), selectedTabs);
     await closeTabs(selectedTabs);
+    await refresh();
   }, [selectedGroup]);
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {

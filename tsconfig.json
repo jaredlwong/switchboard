@@ -9,7 +9,9 @@
     "esModuleInterop": true,
     "jsx": "react",
     "allowSyntheticDefaultImports": true,
-    "noErrorTruncation": true
+    "noErrorTruncation": true,
+    "noImplicitAny": false,
+    "forceConsistentCasingInFileNames": false
   },
   "include": ["src"]
 }

@@ -1,5 +1,5 @@
 import { TabInfo } from "../components/shared";
-import { filterUndefined, sleep } from "./data";
+import { filterSettled, filterUndefined, sleep } from "./data";
 
 export function closeTabs(tabs: TabInfo[]) {
   const ids = filterUndefined(tabs.map((tab) => tab.id));
@@ -124,7 +124,7 @@ export async function moveBookmarksToTabGroup(tabGroupName: string, bookmarks: c
         return undefined;
       }),
   );
-  const tabs: TabInfo[] = filterUndefined(await Promise.all(promises));
+  const tabs: TabInfo[] = filterSettled(await Promise.allSettled(promises));
   const existingTabGroups = await chrome.tabGroups.query({ title: tabGroupName });
 
   // if existing tabgroup with same name exists, put them there
@@ -174,13 +174,8 @@ export async function openBookmarksInTabGroup(
       }),
   );
   try {
-    const results = await Promise.allSettled(promises);
-    const tabIds: number[] = [];
-    results.map((tab) => {
-      if (tab.status === "fulfilled" && tab.value?.id !== undefined) {
-        tabIds.push(tab.value?.id);
-      }
-    });
+    const results = filterSettled(await Promise.allSettled(promises));
+    const tabIds = filterUndefined(results.map((tab) => tab.id));
     await chrome.tabs.group({ groupId: tabGroup.id, tabIds });
   } catch (e) {
     console.error(`Error creating tabs for bookmarks: ${e}`);
@@ -241,7 +236,7 @@ export async function deleteBookmarks(bookmarks: chrome.bookmarks.BookmarkTreeNo
       console.error(`Error deleting bookmark ${bookmark.id}: ${e}`);
     });
   });
-  await Promise.all(promises);
+  await Promise.allSettled(promises);
 }
 
 /**
@@ -289,7 +284,7 @@ export async function createTabGroup(groupName: string, urls: string[]) {
         return undefined;
       }),
   );
-  const tabs: TabInfo[] = filterUndefined(await Promise.all(promises));
+  const tabs: TabInfo[] = filterSettled(await Promise.allSettled(promises));
   moveTabsToNewGroup(groupName, tabs);
 }
 

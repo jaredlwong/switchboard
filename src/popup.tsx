@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
-import { Search } from "./Search/search";
+import { Search } from "./search/search";
 
 // require('./tailwind.css');
 import "./tailwind.css";
