@@ -160,7 +160,6 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames, 
 
   const moveBookmarksToTabGroupInternal = useCallback(async () => {
     const bookmarks = table.getSelectedRowModel().flatRows.map((row) => row.original);
-    setRowSelection({});
     if (bookmarks.length === 0) {
       return;
     }

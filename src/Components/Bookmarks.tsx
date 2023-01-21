@@ -285,7 +285,7 @@ export const Bookmarks: React.FC = () => {
   };
 
   return (
-    <div className="grid grid-cols-1 p-4 bg-gray-200 place-items-center gap-y-4 bg-topography">
+    <div className="grid h-full grid-cols-1 p-4 bg-gray-200 justify-items-center gap-y-4 bg-topography">
       <div className="flex flex-col gap-y-4">
         {[...tabGroups.entries()].map(([groupId, group]) => {
           return (
