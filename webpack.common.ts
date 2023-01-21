@@ -8,10 +8,7 @@ const srcDir = join(__dirname, "src");
 
 const config: webpack.Configuration = {
   entry: {
-    background: join(srcDir, "background.ts"),
-    extension: join(srcDir, "extension.ts"),
-    popup: join(srcDir, "popup.tsx"),
-    page: join(srcDir, "page.tsx"),
+    app: join(srcDir, "app.tsx"),
   },
   output: {
     path: join(__dirname, "dist/js"),
@@ -55,18 +52,6 @@ const config: webpack.Configuration = {
           },
         ],
       },
-      // {
-      //   test: /\.css$/i,
-      //   use: [
-      //     "style-loader",
-      //     "@teamsupercell/typings-for-css-modules-loader",
-      //     {
-      //       loader: "css-loader",
-      //       options: { modules: true },
-      //     },
-      //     "postcss-loader",
-      //   ],
-      // },
       {
         test: /\.module\.(s)?css$/,
         use: [

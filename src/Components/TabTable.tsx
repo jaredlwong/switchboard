@@ -26,7 +26,7 @@ import {
   saveTabsToBookmarkFolder,
   unmuteTab,
 } from "../utils/chrome";
-import { getHostname, relativeTimeFromEpoch, sleep } from "../utils/data";
+import { getHostname, relativeTimeFromEpoch } from "../utils/data";
 import { Favicon } from "./FaviconImage";
 import { GroupName, TabInfo } from "./shared";
 

@@ -1,5 +1,5 @@
 import lodash from "lodash";
-import React, { memo, useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import React, { memo, useCallback, useEffect, useReducer, useRef } from "react";
 import { getExtensionBookmarkFolder } from "../utils/chrome";
 import { sleep } from "../utils/data";
 import { BookmarkTable } from "./BookmarkTable";
@@ -19,35 +19,6 @@ type TabGroup = {
   tabGroup?: chrome.tabGroups.TabGroup;
   groupId: number;
 };
-
-function walkBookmarkTree(root: chrome.bookmarks.BookmarkTreeNode[]): Map<string, BookmarkGroup> {
-  const groups = new Map<string, BookmarkGroup>();
-  const recurse = (previousPath: string[], node: chrome.bookmarks.BookmarkTreeNode) => {
-    const curPath = [...previousPath, node.title];
-    const curGroup: BookmarkGroup = {
-      id: node.id ?? "unknown",
-      parent: node,
-      bookmarks: [],
-      title: node.title,
-      path: curPath,
-    };
-    groups.set(curGroup.id, curGroup);
-    for (const child of node.children ?? []) {
-      if (child.url) {
-        curGroup.bookmarks.push(child);
-      } else {
-        recurse(curPath, child);
-      }
-    }
-    if (curGroup.bookmarks.length === 0) {
-      groups.delete(curGroup.id);
-    }
-  };
-  for (const bookmark of root) {
-    recurse([], bookmark);
-  }
-  return groups;
-}
 
 async function getBookmarkFolders(): Promise<BookmarkGroup[]> {
   const parentFolder = await getExtensionBookmarkFolder();
@@ -114,7 +85,7 @@ interface ActiveTabData {
 const MemoTabTable = memo(TabTable);
 const MemoBookmarkTable = memo(BookmarkTable);
 
-export const Bookmarks: React.FC = () => {
+export const NewTab: React.FC = () => {
   const tabs = useRef<TabInfo[]>([]);
   const tabGroupsRaw = useRef<chrome.tabGroups.TabGroup[]>([]);
   const bookmarkFolders = useRef<BookmarkGroup[]>([]);
