@@ -3,6 +3,7 @@ import ESLintPlugin from "eslint-webpack-plugin";
 import ForkTsCheckerWebpackPlugin from "fork-ts-checker-webpack-plugin";
 import { join } from "path";
 import * as webpack from "webpack";
+import TerserPlugin from "terser-webpack-plugin";
 
 const srcDir = join(__dirname, "src");
 
@@ -13,6 +14,7 @@ const config: webpack.Configuration = {
   output: {
     path: join(__dirname, "dist/js"),
     filename: "[name].js",
+    // clean: true,
   },
   module: {
     rules: [
@@ -106,5 +108,9 @@ const config: webpack.Configuration = {
       },
     }),
   ],
+  // optimization: {
+  //   minimize: true,
+  //   minimizer: [new TerserPlugin()],
+  // },
 };
 export default config;

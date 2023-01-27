@@ -1,6 +1,14 @@
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
-import { BookmarkSquareIcon, FaceSmileIcon, FolderPlusIcon, TrashIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowsPointingInIcon,
+  BarsArrowDownIcon,
+  BookmarkSquareIcon,
+  CursorArrowRippleIcon,
+  FaceSmileIcon,
+  FolderPlusIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 import { cx } from "@linaria/core";
 import { IconSortAscending, IconSortDescending } from "@tabler/icons";
 import {
@@ -14,15 +22,10 @@ import {
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { debounce } from "lodash";
+import { debounce, truncate } from "lodash";
 import React, { HTMLProps, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import {
-  changeBookmarkFolderName,
-  deleteBookmarks,
-  moveBookmarksToFolder,
-  moveBookmarksToTabGroup,
-} from "../utils/chrome";
-import { getHostname, relativeTimeFromDates } from "../utils/data";
+import { changeBookmarkFolderName, deleteBookmarks, moveBookmarksToFolder, openLinksInTabGroup } from "../utils/chrome";
+import { getDuplicates, getHostname, relativeTimeFromDates, sortByUrlAndTitle } from "../utils/data";
 import { Favicon } from "./FaviconImage";
 import { GroupName } from "./shared";
 
@@ -103,7 +106,7 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames, 
       {
         id: "hostname",
         accessorFn: (row) => row.url ?? "",
-        header: "",
+        header: "Host",
         enableSorting: true,
         sortingFn: "alphanumeric",
       } satisfies CB<string>,
@@ -164,7 +167,7 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames, 
       return;
     }
     const tabGroupName = selectedGroupName.current?.toString() ?? groupName.toString();
-    await moveBookmarksToTabGroup(tabGroupName, bookmarks);
+    await openLinksInTabGroup(tabGroupName, bookmarks);
     await refresh();
   }, [groupName]);
 
@@ -195,6 +198,40 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames, 
     // todo handle ungrouped
     setGroupName(groupName.withEmoji(emoji.native));
     setShowEmojiPicker(false);
+  };
+
+  const sortSelectedBookmarks = async () => {
+    const bookmarks = table.getSelectedRowModel().flatRows.map((row) => row.original);
+    setRowSelection({});
+    if (bookmarks.length === 0) {
+      return;
+    }
+    bookmarks.sort((a, b) => ((a.url ?? "") > (b.url ?? "") ? 1 : -1));
+    sortByUrlAndTitle(bookmarks);
+    for (const bookmark of bookmarks) {
+      await chrome.bookmarks.move(bookmark.id, { index: bookmarks.length, parentId: parent.id });
+    }
+  };
+
+  const deleteDuplicateBookmarks = useCallback(async () => {
+    const bookmarks = table.getSelectedRowModel().flatRows.map((row) => row.original);
+    setRowSelection({});
+    if (bookmarks.length === 0) {
+      return;
+    }
+    const dupes = getDuplicates(bookmarks);
+    await deleteBookmarks(dupes);
+  }, []);
+
+  const selectFirstFifty = async () => {
+    const selection: RowSelectionState = {};
+    for (let i = 0; i < Math.min(bookmarks.length, 50); i++) {
+      selection[i.toString()] = true;
+    }
+    setRowSelection(selection);
+    if (bookmarks.length === 0) {
+      return;
+    }
   };
 
   const groupOptionsId = useId();
@@ -233,14 +270,38 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames, 
               {bookmarks.length} bookmarks
             </span>
           </div>
+          <div className="flex flex-row items-center justify-end">
+            <button
+              className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
+              onClick={selectFirstFifty}
+            >
+              <CursorArrowRippleIcon className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         <div className="flex flex-row gap-x-3">
           <div className="flex flex-row items-center justify-end">
             <button
               className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
+              onClick={sortSelectedBookmarks}
+            >
+              <BarsArrowDownIcon className="w-4 h-4" /> Sort
+            </button>
+          </div>
+          <div className="flex flex-row items-center justify-end">
+            <button
+              className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
+              onClick={deleteDuplicateBookmarks}
+            >
+              <ArrowsPointingInIcon className="w-4 h-4" /> Uniq
+            </button>
+          </div>
+          <div className="flex flex-row items-center justify-end">
+            <button
+              className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
               onClick={deleteSelectedBookmarks}
             >
-              <TrashIcon className="w-4 h-4" /> Delete Bookmarks
+              <TrashIcon className="w-4 h-4" /> Delete
             </button>
           </div>
           <div className="flex flex-row items-center justify-end">
@@ -314,7 +375,8 @@ export const BookmarkTable: React.FC<Props> = ({ parent, bookmarks, groupNames, 
                         <Favicon url={cell.getValue<Link>().url} />
                         {/* <span className="inline-block min-w-0 overflow-scroll whitespace-nowrap scrollbar-hide"> */}
                         <a href={cell.getValue<Link>().url} target="_blank" rel="noreferrer">
-                          {cell.getValue<Link>().title}
+                          {/* {cell.getValue<Link>().title} */}
+                          {truncate(cell.getValue<Link>().title, { length: 120 })}
                         </a>
                         {/* <span> */}
                         {/* {cell.getValue<Link>().title} */}

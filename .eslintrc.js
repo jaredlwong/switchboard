@@ -6,4 +6,12 @@ module.exports = {
   rules: {
     "react/prop-types": [1, {ignore: ['className', 'prefixCls', 'size']}],
   },
+  parserOptions: {
+    ecmaFeatures: {
+      jsx: true,
+    },
+    react: {
+      version: "18.0"
+    }
+  }
 };

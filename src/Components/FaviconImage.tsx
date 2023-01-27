@@ -1,4 +1,4 @@
-import React from "react";
+import React, { SyntheticEvent } from "react";
 import { css, cx } from "@linaria/core";
 
 const backup = "https://www.google.com/s2/favicons?domain=example.com";
@@ -17,13 +17,14 @@ function getFaviconUrl(url?: string): string {
 
 type FaviconProps = {
   url?: string;
+  favIconUrl?: string;
 } & React.ImgHTMLAttributes<HTMLImageElement>;
 
-export const Favicon: React.FC<FaviconProps> = ({ url, className, ...props }) => (
+export const Favicon: React.FC<FaviconProps> = ({ url, favIconUrl, className, ...props }) => (
   <img
-    src={getFaviconUrl(url)}
-    onError={(e: any) => {
-      e.target.src = backup;
+    src={favIconUrl !== undefined ? favIconUrl : getFaviconUrl(url)}
+    onError={(e: SyntheticEvent<HTMLImageElement>) => {
+      (e.target as HTMLImageElement).src = backup;
     }}
     className={cx(
       className,

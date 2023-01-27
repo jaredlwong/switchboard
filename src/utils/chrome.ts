@@ -1,5 +1,5 @@
 import { TabInfo } from "../components/shared";
-import { filterSettled, filterUndefined, sleep } from "./data";
+import { filterSettled, filterUndefined, getLinkKey, Link, sleep } from "./data";
 
 export function closeTabs(tabs: TabInfo[]) {
   const ids = filterUndefined(tabs.map((tab) => tab.id));
@@ -112,15 +112,15 @@ export async function saveTabsToFolder(folderName: string, tabs: TabInfo[]) {
  * the tabs will be moved to it. Otherwise, a new tab group with this name will be created.
  * @param bookmarks - The bookmarks to be moved to the tab group.
  */
-export async function moveBookmarksToTabGroup(tabGroupName: string, bookmarks: chrome.bookmarks.BookmarkTreeNode[]) {
-  const promises = bookmarks.map((bookmark) =>
+export async function openLinksInTabGroup(tabGroupName: string, links: Link[]) {
+  const promises = links.map((link) =>
     chrome.tabs
       .create({
         active: false,
-        url: bookmark.url,
+        url: link.url,
       })
       .catch((e) => {
-        console.error(`Error creating tab for bookmark ${bookmark.id}: ${e}`);
+        console.error(`Error creating tab for link ${link.title}=${link.url}: ${e}`);
         return undefined;
       }),
   );
@@ -149,13 +149,30 @@ export async function moveBookmarksToTabGroup(tabGroupName: string, bookmarks: c
 
 export async function moveBookmarksToFolder(folderName: string, bookmarks: chrome.bookmarks.BookmarkTreeNode[]) {
   const folder = await getExtensionBookmarkSubfolder(folderName);
-  const promises = bookmarks.map((bookmark) =>
+  const curLinkKeys = new Set(folder.children?.map((child) => getLinkKey(child)) ?? []);
+  const linksToDelete: chrome.bookmarks.BookmarkTreeNode[] = [];
+  const linksToMove: chrome.bookmarks.BookmarkTreeNode[] = [];
+  for (const bookmark of bookmarks) {
+    if (curLinkKeys.has(getLinkKey(bookmark))) {
+      console.log(`Bookmark ${bookmark.id} already exists in folder ${folderName}`);
+      linksToDelete.push(bookmark);
+    } else {
+      linksToMove.push(bookmark);
+    }
+  }
+  const deletePromises = linksToDelete.map((bookmark) =>
+    chrome.bookmarks.remove(bookmark.id).catch((error) => {
+      console.error(`Deleting bookmark ${bookmark.id} failed: ${error}`);
+      return error;
+    }),
+  );
+  const movePromises = linksToMove.map((bookmark) =>
     chrome.bookmarks.move(bookmark.id, { parentId: folder.id }).catch((error) => {
       console.error(`Moving bookmark ${bookmark.id} failed: ${error}`);
       return error;
     }),
   );
-  return Promise.allSettled(promises);
+  return Promise.allSettled([...deletePromises, ...movePromises]);
 }
 
 export async function openBookmarksInTabGroup(
@@ -182,17 +199,20 @@ export async function openBookmarksInTabGroup(
   }
 }
 
-export async function saveTabsToBookmarkFolder(folderName: string, tabs: TabInfo[]) {
+export async function saveLinksToBookmarkFolder(folderName: string, tabs: Link[]) {
   const folder = await getExtensionBookmarkSubfolder(folderName);
-  const existingBookmarkUrls = new Set<string>();
+  const existingBookmarkKeys = new Set<string>();
   for (const child of folder.children ?? []) {
-    existingBookmarkUrls.add(child.url ?? "");
+    existingBookmarkKeys.add(getLinkKey(child));
   }
-  const promises = tabs
-    .map((tab) => ({ url: tab.url, title: tab.title }))
-    .filter(({ url, title }) => url !== undefined && title !== undefined)
-    .filter(({ url }) => !existingBookmarkUrls.has(url!))
-    .map(({ url, title }) => chrome.bookmarks.create({ parentId: folder.id, title, url }));
+  const promises: Promise<chrome.bookmarks.BookmarkTreeNode>[] = [];
+  for (const tab of tabs) {
+    const key = getLinkKey(tab);
+    if (existingBookmarkKeys.has(key)) {
+      continue;
+    }
+    promises.push(chrome.bookmarks.create({ parentId: folder.id, title: tab.title ?? tab.url, url: tab.url ?? "" }));
+  }
   return Promise.allSettled(promises);
 }
 

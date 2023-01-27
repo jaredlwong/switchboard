@@ -1,5 +1,13 @@
 import { extractLeadingEmoji, stripLeadingEmoji } from "../utils/data";
 
+export type BookmarkGroup = {
+  id: string;
+  parent: chrome.bookmarks.BookmarkTreeNode;
+  bookmarks: chrome.bookmarks.BookmarkTreeNode[];
+  title: string;
+  path: string[];
+};
+
 export type GroupOption =
   | { type: "tabGroup"; value: chrome.tabGroups.TabGroup }
   | { type: "bookmarkFolder"; value: chrome.bookmarks.BookmarkTreeNode };
@@ -80,7 +88,7 @@ export class TabStorage {
  */
 export type TabInfo = Pick<
   chrome.tabs.Tab,
-  "title" | "url" | "windowId" | "active" | "id" | "audible" | "mutedInfo" | "groupId"
+  "title" | "url" | "windowId" | "active" | "id" | "audible" | "mutedInfo" | "groupId" | "favIconUrl"
 > & {
   lastActive?: number;
 };

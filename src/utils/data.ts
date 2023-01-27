@@ -1,10 +1,52 @@
-export function getHostname(url: string): string | undefined {
+export function getHostname(url?: string): string | undefined {
+  if (!url) {
+    return undefined;
+  }
   try {
     const urlObj = new URL(url);
     return urlObj.hostname;
   } catch (e: unknown) {
     return undefined;
   }
+}
+
+/**
+ * getPlainUrl - removes the query string and hash parameters from a url, but keep the main uri component
+ *
+ * @param {string} [url] - the url to remove the query string and hash parameters from
+ *
+ * @returns {string | undefined} - the plain url, or undefined if the input is not a valid url
+ */
+export function getPlainUrl(url?: string): string | undefined {
+  if (!url) {
+    return undefined;
+  }
+  try {
+    const urlObj = new URL(url);
+    urlObj.search = "";
+    urlObj.hash = "";
+    return urlObj.toString();
+  } catch (e: unknown) {
+    return undefined;
+  }
+}
+
+export interface Link {
+  url?: string;
+  title?: string;
+}
+
+/**
+ * getLinkKey - creates a unique key for a tab or bookmark based on the main uri component and title
+ *
+ * @param {Object} link - the tab or bookmark object
+ * @param {string} [link.url] - the url of the tab or bookmark
+ * @param {string} [link.title] - the title of the tab or bookmark
+ *
+ * @returns {string} - the unique key for the tab or bookmark
+ */
+export function getLinkKey(link: Link): string {
+  return `${getPlainUrl(link.url) ?? link.url ?? ""}^${link.title?.toLowerCase() ?? ""}`;
 }
 
 const units: { unit: Intl.RelativeTimeFormatUnit; ms: number }[] = [
@@ -85,18 +127,28 @@ export async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function stringToUCS2(str: string): string {
-  let ucs2 = "";
-  for (let i = 0; i < str.length; i++) {
-    const charCode = str.charCodeAt(i);
-    if (charCode > 0xffff) {
-      const surrogatePair = charCode.toString(16);
-      const high = parseInt("0x" + surrogatePair.slice(0, -4));
-      const low = parseInt("0x" + surrogatePair.slice(-4));
-      ucs2 += "\\u" + high.toString(16) + "\\u" + low.toString(16);
-    } else {
-      ucs2 += "\\u" + charCode.toString(16);
+export function getSortKey(link: Link): string {
+  return `${getHostname(link.url) ?? ""}^${link.title?.toLowerCase() ?? ""}`;
+}
+
+/**
+ * This function sorts bookmarks or tabs by hostname and title.
+ */
+export function sortByUrlAndTitle(objs: Link[]) {
+  objs.sort((a, b) => {
+    return getSortKey(a) < getSortKey(b) ? -1 : 1;
+  });
+}
+
+export function getDuplicates<T extends Link>(links: T[]): T[] {
+  const duplicates: T[] = [];
+  const linkKeys: Set<string> = new Set();
+  for (const link of links) {
+    const key = getLinkKey(link);
+    if (linkKeys.has(key)) {
+      duplicates.push(link);
     }
+    linkKeys.add(key);
   }
-  return ucs2;
+  return duplicates;
 }

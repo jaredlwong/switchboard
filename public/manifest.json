@@ -2,9 +2,8 @@
   "manifest_version": 3,
   "name": "switchboard",
   "version": "1.0.0",
-  "description": "Introducing Switchboard - the ultimate tab and bookmark management tool for your Chrome browser. With Switchboard, you can easily organize and access all of your tabs and bookmarks right from your newtab page. Say goodbye to cluttered tabs and scattered bookmarks, and hello to a streamlined browsing experience.",
+  "description": "With Switchboard, you can easily organize and access all of your tabs and bookmarks right from your newtab page.",
   "permissions": [
-    "activeTab",
     "bookmarks",
     "storage",
     "tabGroups",

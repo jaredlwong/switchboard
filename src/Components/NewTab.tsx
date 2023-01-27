@@ -3,16 +3,9 @@ import React, { memo, useCallback, useEffect, useReducer, useRef } from "react";
 import { getExtensionBookmarkFolder } from "../utils/chrome";
 import { sleep } from "../utils/data";
 import { BookmarkTable } from "./BookmarkTable";
-import { GroupName, TabInfo, TabStorage } from "./shared";
+import { Footer } from "./Footer";
+import { BookmarkGroup, GroupName, TabInfo, TabStorage } from "./shared";
 import { TabTable } from "./TabTable";
-
-type BookmarkGroup = {
-  id: string;
-  parent: chrome.bookmarks.BookmarkTreeNode;
-  bookmarks: chrome.bookmarks.BookmarkTreeNode[];
-  title: string;
-  path: string[];
-};
 
 type TabGroup = {
   tabs: TabInfo[];
@@ -175,6 +168,7 @@ export const NewTab: React.FC = () => {
         mutedInfo: tab.mutedInfo,
         groupId: tab.groupId,
         lastActive: tabStorages.get(tab.id ?? -1)?.lastActive,
+        favIconUrl: tab.favIconUrl,
       });
     }
     tabs.current = tabInfo;
@@ -230,7 +224,7 @@ export const NewTab: React.FC = () => {
       }
       return newBookmarkGroups;
     },
-    new Map(),
+    new Map<string, BookmarkGroup>(),
   );
 
   const [groupNames, setGroupNames] = useReducer((oldGroupNames: GroupName[], newGroupNames: GroupName[]) => {
@@ -281,6 +275,7 @@ export const NewTab: React.FC = () => {
           />
         ))}
       </div>
+      <Footer bookmarkGroups={[...bookmarkGroups.values()]} groupNames={groupNames} refresh={refresh} />
     </div>
   );
 };

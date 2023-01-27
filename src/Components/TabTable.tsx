@@ -1,6 +1,12 @@
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
-import { BookmarkSquareIcon, FaceSmileIcon, FolderPlusIcon, TrashIcon } from "@heroicons/react/24/outline";
+import {
+  BookmarkSquareIcon,
+  FaceSmileIcon,
+  FolderPlusIcon,
+  TrashIcon,
+  ArrowsPointingInIcon,
+} from "@heroicons/react/24/outline";
 import { cx } from "@linaria/core";
 import { IconSortAscending, IconSortDescending, IconTrash, IconVolume, IconVolumeOff } from "@tabler/icons";
 import {
@@ -15,7 +21,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { debounce, truncate } from "lodash";
-import React, { HTMLProps, useCallback, useId, useMemo, useState } from "react";
+import React, { HTMLProps, useCallback, useId, useMemo, useRef, useState } from "react";
 import {
   addTabsToGroup,
   changeTabGroupName,
@@ -23,10 +29,10 @@ import {
   closeTabs,
   focusOnTab,
   muteTab,
-  saveTabsToBookmarkFolder,
+  saveLinksToBookmarkFolder,
   unmuteTab,
 } from "../utils/chrome";
-import { getHostname, relativeTimeFromEpoch } from "../utils/data";
+import { getDuplicates, getHostname, relativeTimeFromEpoch } from "../utils/data";
 import { Favicon } from "./FaviconImage";
 import { GroupName, TabInfo } from "./shared";
 
@@ -36,10 +42,10 @@ const IndeterminateCheckbox: React.FC<
     className?: string;
   } & HTMLProps<HTMLInputElement>
 > = ({ indeterminate, className, ...props }) => {
-  const ref = React.useRef<HTMLInputElement>(null!);
+  const ref = useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    if (typeof indeterminate === "boolean") {
+    if (typeof indeterminate === "boolean" && ref.current) {
       ref.current.indeterminate = !props.checked && indeterminate;
     }
   }, [ref, indeterminate]);
@@ -83,6 +89,7 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames, refresh 
   const [sorting, setSorting] = useState<SortingState>([]);
   const [selectedGroup, setSelectedGroup] = useState<string | undefined>(undefined);
   const [showEmojiPicker, setShowEmojiPicker] = useState<boolean>(false);
+  const groupName = GroupName.fromString(tabGroup?.title ?? "");
 
   // const [groupName, setGroupName] = useState<GroupName>(GroupName.fromString(tabGroup?.title ?? ""));
   // // update group name
@@ -92,7 +99,7 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames, refresh 
   //   }
   // }, [groupName]);
 
-  type Link = { url: string; title: string };
+  type Link = { url: string; title: string; favIconUrl?: string };
 
   type CB<T> = ColumnDef<TabInfo, T>;
 
@@ -121,7 +128,8 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames, refresh 
       } satisfies CB<number>,
       {
         id: "title",
-        accessorFn: (row) => ({ url: row.url ?? "", title: row.title ?? "" } satisfies Link),
+        accessorFn: (row) =>
+          ({ url: row.url ?? "", title: row.title ?? "", favIconUrl: row.favIconUrl } satisfies Link),
         header: "Title",
         enableSorting: true,
         sortingFn: (rowA: Row<TabInfo>, rowB: Row<TabInfo>, columnId: string) => {
@@ -200,14 +208,16 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames, refresh 
 
   const moveTabsToFolderInternal = useCallback(async () => {
     const selectedTabs = table.getSelectedRowModel().flatRows.map((row) => row.original);
-    if (selectedGroup === undefined || selectedTabs.length == 0) {
+    if (selectedTabs.length == 0) {
       return;
     }
     setRowSelection({});
-    await saveTabsToBookmarkFolder(selectedGroup.toString(), selectedTabs);
+    const folderName = selectedGroup === undefined ? groupName.toString() : selectedGroup.toString();
+    console.log(`fucking folder name: ${folderName}`);
+    await saveLinksToBookmarkFolder(folderName, selectedTabs);
     await closeTabs(selectedTabs);
     await refresh();
-  }, [selectedGroup]);
+  }, [selectedGroup, groupName]);
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedGroup(event.target.value);
@@ -240,7 +250,7 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames, refresh 
   }, [showEmojiPicker]);
 
   const handleEmojiSelected = useCallback(
-    (emoji: any) => {
+    (emoji: { native: string }) => {
       // todo handle ungrouped
       changeTabGroupNameInternal(tabGroup?.id, { oldName: tabGroup?.title, newEmoji: emoji.native });
       setShowEmojiPicker(false);
@@ -248,9 +258,17 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames, refresh 
     [tabGroup],
   );
 
-  const groupOptionsId = useId();
+  const closeDuplicateTabs = useCallback(async () => {
+    const selectedTabs = table.getSelectedRowModel().flatRows.map((row) => row.original);
+    if (selectedTabs.length == 0) {
+      return;
+    }
+    setRowSelection({});
+    const dupes = getDuplicates(selectedTabs);
+    await closeTabs(dupes);
+  }, []);
 
-  const groupName = GroupName.fromString(tabGroup?.title ?? "");
+  const groupOptionsId = useId();
 
   return (
     <div className="p-2 min-w-[200px] w-screen lg:max-w-6xl flex flex-col rounded-xl border border-solid border-slate-200 bg-white items-start gap-2.5 shadow-md">
@@ -285,6 +303,14 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames, refresh 
           </div>
         </div>
         <div className="flex flex-row gap-x-3">
+          <div className="flex flex-row items-center justify-end">
+            <button
+              className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
+              onClick={closeDuplicateTabs}
+            >
+              <ArrowsPointingInIcon className="w-4 h-4" /> Uniq
+            </button>
+          </div>
           <div className="flex flex-row items-center justify-end">
             <button
               className="flex items-center justify-center gap-2 px-2 py-1 font-sans text-sm font-semibold bg-indigo-100 border border-solid rounded-lg hover:bg-indigo-200"
@@ -369,7 +395,11 @@ export const TabTable: React.FC<Props> = ({ tabGroup, tabs, groupNames, refresh 
                   return (
                     <td key={cell.id} className="h-6 border-b border-b-slate-300">
                       <div className="flex flex-no-wrap pl-1.5 min-w-0 items-center hover:underline cursor-pointer">
-                        <Favicon url={cell.getValue<Link>().url} />
+                        <Favicon
+                          url={cell.getValue<Link>().url}
+                          favIconUrl={cell.getValue<Link>().favIconUrl}
+                          className="w-4 h-4"
+                        />
                         {/* <span className="inline-block min-w-0 overflow-scroll whitespace-nowrap scrollbar-hide"> */}
                         <span onClick={() => focusOnTab(cell.row.original)}>
                           {/* {cell.getValue<Link>().title} */}
